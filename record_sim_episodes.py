@@ -1,3 +1,4 @@
+# 生成模拟环境中的演示数据
 import time
 import os
 import numpy as np
@@ -70,6 +71,7 @@ def main(args):
         episode_return = np.sum([ts.reward for ts in episode[1:]])
         episode_max_reward = np.max([ts.reward for ts in episode[1:]])
         if episode_max_reward == env.task.max_reward:
+            # 如果reward是最大的，即完成了所有的动作
             print(f"{episode_idx=} Successful, {episode_return=}")
         else:
             print(f"{episode_idx=} Failed")

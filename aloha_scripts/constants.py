@@ -2,7 +2,7 @@
 import pathlib
 import os
 
-DATA_DIR = os.path.expanduser('~/data/aloha/')
+DATA_DIR = os.path.expanduser('/home/juyiii/data/aloha/')
 TASK_CONFIGS = {
     'aloha_mobile_dummy':{
         'dataset_dir': DATA_DIR + '/aloha_mobile_dummy',

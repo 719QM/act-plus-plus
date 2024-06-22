@@ -1,3 +1,4 @@
+# 具有EE space control 的 Mujoco +DM_Control 环境（EE end effector，工作空间）
 import numpy as np
 import collections
 import os
@@ -56,6 +57,7 @@ class BimanualViperXEETask(base.Task):
         super().__init__(random=random)
 
     def before_step(self, action, physics):
+        # 在每一步动作之前被调用。它接受动作和物理模型作为参数。动作被分为左右两部分，分别对应左右手的动作。这些动作被用来设置模拟环境中的位置和方向
         a_len = len(action) // 2
         action_left = action[:a_len]
         action_right = action[a_len:]
@@ -74,6 +76,7 @@ class BimanualViperXEETask(base.Task):
         np.copyto(physics.data.ctrl, np.array([g_left_ctrl, -g_left_ctrl, g_right_ctrl, -g_right_ctrl]))
 
     def initialize_robots(self, physics):
+        # 用于初始化机器人的状态。它首先重置关节位置，然后设置模拟环境中的位置和方向，最后重置夹具控制
         # reset joint position
         physics.named.data.qpos[:16] = START_ARM_POSE
 
@@ -159,8 +162,11 @@ class TransferCubeEETask(BimanualViperXEETask):
         """Sets the state of the environment at the start of each episode."""
         self.initialize_robots(physics)
         # randomize box position
+        # 调用函数 sample_box_pose()，该函数返回一个表示盒子新位置和姿态的数组 cube_pose。
         cube_pose = sample_box_pose()
+        # 获取与盒子关联的关节在 qpos（关节位置数组）中的起始索引。具体来说，它使用 name2id 方法，通过给定的关节名称 'red_box_joint' 查找对应的索引。'joint' 指定了查找的类别为关节。
         box_start_idx = physics.model.name2id('red_box_joint', 'joint')
+        # 将新采样的盒子位置和姿态 (cube_pose) 复制到物理模拟的数据结构中。
         np.copyto(physics.data.qpos[box_start_idx : box_start_idx + 7], cube_pose)
         # print(f"randomized cube position to {cube_position}")
 

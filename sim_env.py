@@ -1,3 +1,4 @@
+# 具有joint space control 的 Mujoco +DM_Control 环境 (通过关节控制）
 import numpy as np
 import os
 import collections
@@ -20,7 +21,7 @@ BOX_POSE = [None] # to be changed from outside
 def make_sim_env(task_name):
     """
     Environment for simulated robot bi-manual manipulation, with joint position control
-    Action space:      [left_arm_qpos (6),             # absolute joint position
+    Action space:      [left_arm_qpos (6),             # absolute joint position 此处与ee不同
                         left_gripper_positions (1),    # normalized gripper position (0: close, 1: open)
                         right_arm_qpos (6),            # absolute joint position
                         right_gripper_positions (1),]  # normalized gripper position (0: close, 1: open)

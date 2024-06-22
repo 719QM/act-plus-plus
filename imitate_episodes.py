@@ -1,3 +1,4 @@
+# 训练和评估ACT
 import torch
 import numpy as np
 import os
@@ -35,8 +36,8 @@ def get_auto_index(dataset_dir):
     raise Exception(f"Error getting auto index, or more than {max_idx} episodes")
 
 def main(args):
-    set_seed(1)
-    # command line parameters
+    set_seed(1) #设置随机种子以保证结果可重现
+    # command line parameters 解析命令行参数
     is_eval = args['eval']
     ckpt_dir = args['ckpt_dir']
     policy_class = args['policy_class']
@@ -55,15 +56,18 @@ def main(args):
     print('---------------------------------------')
 
     # get task parameters
+    # 如果任务的前四个字符是sim_，is_sim=1
     is_sim = task_name[:4] == 'sim_'
-    # print teask name and config
+    # print the task name and config
     print('task_name: ', task_name)
+    # 如果是模拟任务，从constants导入SIM_TASK_CONFIGS
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS
         task_config = SIM_TASK_CONFIGS[task_name]
     else:
         from aloha_scripts.constants import TASK_CONFIGS
         task_config = TASK_CONFIGS[task_name]
+    # 从任务配置中获取相关参数
     dataset_dir = task_config['dataset_dir']
     # num_episodes = task_config['num_episodes']
     episode_len = task_config['episode_len']
@@ -74,12 +78,16 @@ def main(args):
     name_filter = task_config.get('name_filter', lambda n: True)
 
     # fixed parameters
+    # 定义模型的架构和超参数，包括学习率、网络结构、层数等
     state_dim = 14
     lr_backbone = 1e-5
     backbone = 'resnet18'
     if policy_class == 'ACT':
+        # 编码层
         enc_layers = 4
+        # 解码层
         dec_layers = 7
+        # 头数
         nheads = 8
         policy_config = {'lr': args['lr'],
                          'num_queries': args['chunk_size'],
@@ -124,6 +132,7 @@ def main(args):
         'prediction_len': args['prediction_len'],
     }
 
+    # 配置训练参数
     config = {
         'num_steps': num_steps,
         'eval_every': eval_every,
@@ -145,21 +154,24 @@ def main(args):
         'load_pretrain': args['load_pretrain'],
         'actuator_config': actuator_config,
     }
-
     if not os.path.isdir(ckpt_dir):
         os.makedirs(ckpt_dir)
     config_path = os.path.join(ckpt_dir, 'config.pkl')
     expr_name = ckpt_dir.split('/')[-1]
+
+    # 训练模式
     if not is_eval:
-        wandb.init(project="mobile-aloha2", reinit=True, entity="moma", name=expr_name)
+        wandb.init(project="aloha_test", reinit=True, entity="juyiii719", name=expr_name)
         wandb.config.update(config)
     with open(config_path, 'wb') as f:
         pickle.dump(config, f)
+    # 评估模式
     if is_eval:
         ckpt_names = [f'policy_best.ckpt']
         results = []
         for ckpt_name in ckpt_names:
-            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=3)
+            # 使用eval_bc函数进行评估，返回值为成功率和平均回报，将这些值存储在results中
+            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=10)
             # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
             results.append([ckpt_name, success_rate, avg_return])
 
@@ -173,14 +185,16 @@ def main(args):
                                                            policy_class, stats_dir_l=stats_dir, sample_weights=sample_weights, train_ratio=train_ratio)
 
     # save dataset stats
+    # 保存数据集统计信息
     stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
     with open(stats_path, 'wb') as f:
         pickle.dump(stats, f)
 
+    # 训练并获取最佳检查点信息
     best_ckpt_info = train_bc(train_dataloader, val_dataloader, config)
     best_step, min_val_loss, best_state_dict = best_ckpt_info
 
-    # save best checkpoint
+    # save best checkpoint 保存最佳检查点
     ckpt_path = os.path.join(ckpt_dir, f'policy_best.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Best ckpt, val loss {min_val_loss:.6f} @ step{best_step}')
@@ -212,12 +226,12 @@ def make_optimizer(policy_class, policy):
 
 
 def get_image(ts, camera_names, rand_crop_resize=False):
-    curr_images = []
+    curr_images = []  # 存储从每个摄像头获取的图像
     for cam_name in camera_names:
         curr_image = rearrange(ts.observation['images'][cam_name], 'h w c -> c h w')
         curr_images.append(curr_image)
-    curr_image = np.stack(curr_images, axis=0)
-    curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
+    curr_image = np.stack(curr_images, axis=0)  # 将图像列表堆叠成数组
+    curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)  # 从 numpy 转为 torch，并归一化到0～1之间， 转移到GPU上， 添加一个新的维度
 
     if rand_crop_resize:
         print('rand crop resize is used!')
@@ -234,6 +248,7 @@ def get_image(ts, camera_names, rand_crop_resize=False):
 
 
 def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
+    # 传参与配置信息
     set_seed(1000)
     ckpt_dir = config['ckpt_dir']
     state_dim = config['state_dim']
@@ -250,7 +265,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     actuator_config = config['actuator_config']
     use_actuator_net = actuator_config['actuator_network_dir'] is not None
 
-    # load policy and stats
+    # load policy and stats 加载策略和统计信息
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
     policy = make_policy(policy_class, policy_config)
     loading_status = policy.deserialize(torch.load(ckpt_path))
@@ -295,13 +310,16 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     #         post_processed_actions = post_process(all_actions.squeeze(0).cpu().numpy())
     #         norm_episode_all_base_actions += actuator_norm(post_processed_actions[:, -2:]).tolist()
 
+    # 定义预处理和后处理函数
+    # 预处理： 标准化为均值为0方差为1的分布
     pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std']
+    # 后处理： 还原到动作范围
     if policy_class == 'Diffusion':
         post_process = lambda a: ((a + 1) / 2) * (stats['action_max'] - stats['action_min']) + stats['action_min']
     else:
         post_process = lambda a: a * stats['action_std'] + stats['action_mean']
 
-    # load environment
+    # load environment 加载环境
     if real_robot:
         from aloha_scripts.robot_utils import move_grippers # requires aloha
         from aloha_scripts.real_env import make_real_env # requires aloha
@@ -312,6 +330,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         env = make_sim_env(task_name)
         env_max_reward = env.task.max_reward
 
+    # 设置查询频率和时间聚合参数
     query_frequency = policy_config['num_queries']
     if temporal_agg:
         query_frequency = 1
@@ -320,8 +339,11 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         BASE_DELAY = 13
         query_frequency -= BASE_DELAY
 
+    # 设置最大时间步长
     max_timesteps = int(max_timesteps * 1) # may increase for real-world tasks
 
+    # 开始评估： 两大循环-大循环num_rollouts回合，每个回合下的下循环跑完时间步长
+    # 存储每个回合的回报和最高奖励
     episode_returns = []
     highest_rewards = []
     for rollout_id in range(num_rollouts):
@@ -334,7 +356,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         elif 'sim_insertion' in task_name:
             BOX_POSE[0] = np.concatenate(sample_insertion_pose()) # used in sim reset
 
-        ts = env.reset()
+        ts = env.reset()  # 重置环境
 
         ### onscreen render
         if onscreen_render:
@@ -344,16 +366,17 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
         ### evaluation loop
         if temporal_agg:
-            all_time_actions = torch.zeros([max_timesteps, max_timesteps+num_queries, 16]).cuda()
+            all_time_actions = torch.zeros([max_timesteps, max_timesteps+num_queries, 16]).cuda()  # 用于存储所有时间步的动作
 
         # qpos_history = torch.zeros((1, max_timesteps, state_dim)).cuda()
-        qpos_history_raw = np.zeros((max_timesteps, state_dim))
+        qpos_history_raw = np.zeros((max_timesteps, state_dim))  # 用于存储每个时间步的机器人关节位置
         image_list = [] # for visualization
         qpos_list = []
         target_qpos_list = []
         rewards = []
         # if use_actuator_net:
         #     norm_episode_all_base_actions = [actuator_norm(np.zeros(history_len, 2)).tolist()]
+        # 进入小循环： 对于每个时间步，它先获取当前的观察结果（包括图像和机器人关节位置），然后查询策略以获取动作
         with torch.inference_mode():
             time0 = time.time()
             DT = 1 / FPS
@@ -362,7 +385,9 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 time1 = time.time()
                 ### update onscreen render and wait for DT
                 if onscreen_render:
+                    # env._physics.render 获取模拟环境的渲染图像
                     image = env._physics.render(height=480, width=640, camera_id=onscreen_cam)
+                    # 更新显示的图像
                     plt_img.set_data(image)
                     plt.pause(DT)
 
@@ -503,6 +528,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
             plt.close()
 
 
+        # 计算回报和奖励
         rewards = np.array(rewards)
         episode_return = np.sum(rewards[rewards!=None])
         episode_returns.append(episode_return)
@@ -513,6 +539,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         # if save_episode:
         #     save_videos(image_list, DT, video_path=os.path.join(ckpt_dir, f'video{rollout_id}.mp4'))
 
+    # 所有50个回合结束后，计算成功率与平均回报
     success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
     avg_return = np.mean(episode_returns)
     summary_str = f'\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n'
@@ -535,12 +562,18 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
 
 def forward_pass(data, policy):
+    # 前向传播生成模型的输出
     image_data, qpos_data, action_data, is_pad = data
+    # 将张量数据从CPU内存移动到GPU内存
     image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
     return policy(qpos_data, image_data, action_data, is_pad) # TODO remove None
 
 
 def train_bc(train_dataloader, val_dataloader, config):
+    # 该函数用于训练行为克隆模型BC
+    # train_dataloader 训练数据的数据加载器， val_dataloader 验证数据的数据加载器， config 包含训练配置信息的字典
+
+    # 初始化训练过程所需的各种参数和配置
     num_steps = config['num_steps']
     ckpt_dir = config['ckpt_dir']
     seed = config['seed']
@@ -562,6 +595,7 @@ def train_bc(train_dataloader, val_dataloader, config):
     policy.cuda()
     optimizer = make_optimizer(policy_class, policy)
 
+    # 训练循环：验证、训练、保存权重
     min_val_loss = np.inf
     best_ckpt_info = None
     
@@ -570,7 +604,8 @@ def train_bc(train_dataloader, val_dataloader, config):
         # validation
         if step % validate_every == 0:
             print('validating')
-
+            # 评估模式
+            # 对验证数据集进行遍历，对于每一批数据都会进行一次前向传播，并将结果添加到‘validation_dicts’列表中
             with torch.inference_mode():
                 policy.eval()
                 validation_dicts = []
@@ -580,8 +615,10 @@ def train_bc(train_dataloader, val_dataloader, config):
                     if batch_idx > 50:
                         break
 
+                # 计算这个列表的平均值，并将其添加到 validation_summary 中
                 validation_summary = compute_dict_mean(validation_dicts)
 
+                # 如果这个轮次的loss小于之前的最小验证损失，就更新最小验证损失，并保存当前的模型
                 epoch_val_loss = validation_summary['loss']
                 if epoch_val_loss < min_val_loss:
                     min_val_loss = epoch_val_loss
@@ -604,7 +641,7 @@ def train_bc(train_dataloader, val_dataloader, config):
             # success, _ = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=10)
             # wandb.log({'success': success}, step=step)
 
-        # training
+        # training 训练模式
         policy.train()
         optimizer.zero_grad()
         data = next(train_dataloader)
@@ -615,6 +652,7 @@ def train_bc(train_dataloader, val_dataloader, config):
         optimizer.step()
         wandb.log(forward_dict, step=step) # not great, make training 1-2% slower
 
+        # 每隔一定周期，保存当前模型的权重
         if step % save_every == 0:
             ckpt_path = os.path.join(ckpt_dir, f'policy_step_{step}_seed_{seed}.ckpt')
             torch.save(policy.serialize(), ckpt_path)
@@ -630,6 +668,7 @@ def train_bc(train_dataloader, val_dataloader, config):
     return best_ckpt_info
 
 def repeater(data_loader):
+    # 不是很理解这个函数的意义何在
     epoch = 0
     for loader in repeat(data_loader):
         for data in loader:

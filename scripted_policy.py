@@ -1,3 +1,4 @@
+# 模拟环境的脚本化策略
 import numpy as np
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
@@ -11,17 +12,22 @@ e = IPython.embed
 
 class BasePolicy:
     def __init__(self, inject_noise=False):
+        # 初始化，接收参数inject_noise， 并定义步数和左右轨迹
         self.inject_noise = inject_noise
         self.step_count = 0
         self.left_trajectory = None
         self.right_trajectory = None
 
     def generate_trajectory(self, ts_first):
+        # 该函数需要在子类中进行实现，如果没有实现则会抛异常
         raise NotImplementedError
 
     @staticmethod
     def interpolate(curr_waypoint, next_waypoint, t):
+        # 静态方法，可以在不创建类实例的情况下调用。静态方法没有self参数，不能访问实例属性和方法。
+        # 用于在两个路标点之间插值得到当前姿势和夹爪指令
         t_frac = (t - curr_waypoint["t"]) / (next_waypoint["t"] - curr_waypoint["t"])
+        # 如果 t_frac 是0，表示当前时间与当前路标点的时间相等，如果 t_frac 是1，表示当前时间与下一个路标点的时间相等
         curr_xyz = curr_waypoint['xyz']
         curr_quat = curr_waypoint['quat']
         curr_grip = curr_waypoint['gripper']
@@ -34,12 +40,16 @@ class BasePolicy:
         return xyz, quat, gripper
 
     def __call__(self, ts):
+        # 自动调用,当给一个对象传入参数后，就会自动调用call函数
         # generate trajectory at first timestep, then open-loop execution
         if self.step_count == 0:
             self.generate_trajectory(ts)
 
         # obtain left and right waypoints
+        # 这段代码的作用是从左右轨迹中获取当前时刻的路标点和下一个将要到达的路标点，以供后续的插值计算使用
         if self.left_trajectory[0]['t'] == self.step_count:
+            # .pop(0) 会移除并返回列表中的第一个元素
+            # current_waypoint为trajectory的第0个元素，next_waypoint为第一个元素
             self.curr_left_waypoint = self.left_trajectory.pop(0)
         next_left_waypoint = self.left_trajectory[0]
 
