@@ -1,4 +1,5 @@
 # 模拟环境的脚本化策略
+# 返回action
 import numpy as np
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
@@ -11,6 +12,10 @@ e = IPython.embed
 
 
 class BasePolicy:
+    # 定义了__init__, generate_trajectory, interpolate, __call__函数，
+    # 其中__init__和__call__函数会自动调用
+    # generate_trajectory 函数在子类中被定义
+    # 在__call__函数中会调用generate_trajectory, interpolate函数
     def __init__(self, inject_noise=False):
         # 初始化，接收参数inject_noise， 并定义步数和左右轨迹
         self.inject_noise = inject_noise
@@ -157,7 +162,56 @@ class InsertionPolicy(BasePolicy):
             {"t": 400, "xyz": meet_xyz + np.array([0.05, 0, lift_right]), "quat": gripper_pick_quat_right.elements, "gripper": 0},  # insertion
 
         ]
+# TODO 添加RM机械臂的类，需要修改轨迹内容
+class RMPolicy_simpletrajectory(BasePolicy):
 
+    def generate_trajectory(self, ts_first):
+        init_mocap_pose_right = ts_first.observation['mocap_pose_right']
+        init_mocap_pose_left = ts_first.observation['mocap_pose_left']
+
+        box_info = np.array(ts_first.observation['env_state'])
+        box_xyz = box_info[:3]
+        box_quat = box_info[3:]
+        # print(f"Generate trajectory for {box_xyz=}")
+
+        gripper_pick_quat = Quaternion(init_mocap_pose_right[3:])
+        gripper_pick_quat = gripper_pick_quat * Quaternion(axis=[0.0, 1.0, 0.0], degrees=-60)
+
+        meet_left_quat = Quaternion(axis=[1.0, 0.0, 0.0], degrees=90)
+
+        meet_xyz = np.array([0, 0.5, 0.25])
+
+        self.left_trajectory = [
+            {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 0},  # sleep
+            {"t": 100, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
+            # approach meet position
+            {"t": 260, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
+            # move to meet position
+            {"t": 310, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 0},
+            # close gripper
+            {"t": 360, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
+            # move left
+            {"t": 400, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
+            # stay
+        ]
+
+        self.right_trajectory = [
+            {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 0},  # sleep
+            {"t": 90, "xyz": box_xyz + np.array([0, 0, 0.08]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # approach the cube
+            {"t": 130, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # go down
+            {"t": 170, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 0},
+            # close gripper
+            {"t": 200, "xyz": meet_xyz + np.array([0.05, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 0},
+            # approach meet position
+            {"t": 220, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 0},  # move to meet position
+            {"t": 310, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 1},  # open gripper
+            {"t": 360, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # move to right
+            {"t": 400, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # stay
+        ]
 
 def test_policy(task_name):
     # example rolling out pick_and_transfer policy
@@ -178,7 +232,7 @@ def test_policy(task_name):
         episode = [ts]
         if onscreen_render:
             ax = plt.subplot()
-            plt_img = ax.imshow(ts.observation['images']['angle'])
+            plt_img = ax.imshow(ts.observation['images']['top'])
             plt.ion()
 
         policy = PickAndTransferPolicy(inject_noise)
@@ -187,7 +241,7 @@ def test_policy(task_name):
             ts = env.step(action)
             episode.append(ts)
             if onscreen_render:
-                plt_img.set_data(ts.observation['images']['angle'])
+                plt_img.set_data(ts.observation['images']['top'])
                 plt.pause(0.02)
         plt.close()
 

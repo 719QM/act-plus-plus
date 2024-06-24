@@ -1,0 +1,38 @@
+<mujoco>
+    <include file="rm_scene.xml"/>
+    <include file="rm_dependencies.xml"/>
+
+    <worldbody>
+        <include file="rm_baselink.xml"/>
+    </worldbody>
+
+    <actuator>
+    <position name="pleft_joint_1"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_1"  kp="80"/>
+    <position name="pleft_joint_2"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_2"  kp="80"/>
+    <position name="pleft_joint_3"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_3"  kp="80"/>
+    <position name="pleft_joint_4"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_4"  kp="80"/>
+    <position name="pleft_joint_5"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_5"  kp="65"/>
+    <position name="pleft_joint_6"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_6"  kp="65"/>
+    <position name="pright_joint_1"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_1" kp="80"/>
+    <position name="pright_joint_2"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_2" kp="80"/>
+    <position name="pright_joint_3"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_3" kp="80"/>
+    <position name="pright_joint_4"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_4" kp="80"/>
+    <position name="pright_joint_5"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_5" kp="65"/>
+    <position name="pright_joint_6"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_6" kp="65"/>
+<!--    <position name="plift_joint"     ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"  kp="65"/> -->
+
+    <velocity name="vleft_joint_1"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_1"  kv="50"/>
+    <velocity name="vleft_joint_2"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_2"  kv="50"/>
+    <velocity name="vleft_joint_3"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_3"  kv="50"/>
+    <velocity name="vleft_joint_4"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_4"  kv="50"/>
+    <velocity name="vleft_joint_5"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_5"  kv="50"/>
+    <velocity name="vleft_joint_6"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_6"  kv="40"/>
+    <velocity name="vright_joint_1" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_1" kv="50"/>
+    <velocity name="vright_joint_2" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_2" kv="50"/>
+    <velocity name="vright_joint_3" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_3" kv="50"/>
+    <velocity name="vright_joint_4" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_4" kv="50"/>
+    <velocity name="vright_joint_5" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_5" kv="50"/>
+    <velocity name="vright_joint_6" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_6" kv="40"/>
+<!--    <velocity name="vlift_joint"    ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"        kv="40"/> -->
+    </actuator>
+</mujoco>
