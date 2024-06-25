@@ -16,11 +16,11 @@
             <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_right_site3" rgba="1 0 0 1"/>
         </body>
 
-<!--        <body name="box" pos="0.2 0.5 0.05">-->
-<!--            <joint name="red_box_joint" type="free" frictionloss="0.01" />-->
-<!--            <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />-->
-<!--            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.02 0.02 0.02" type="box" name="red_box" rgba="1 0 0 1" />-->
-<!--        </body>-->
+        <body name="box" pos="-0.5 0 0.3">
+            <joint name="red_box_joint" type="free" frictionloss="0.01" />
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
+            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.05 0.05 0.3" type="box" name="red_box" rgba="1 0 0 0.5" />
+        </body>
     </worldbody>
 
     <equality>
@@ -28,16 +28,21 @@
         <weld body1="mocap_right" body2="handforcesensor4" solref="0.01 1" solimp=".25 .25 0.001" />
     </equality>
 
-<!--    <actuator>-->
-<!--        <position ctrllimited="true" ctrlrange="0.021 0.057" joint="vx300s_left/left_finger" kp="200"  user="1"/>-->
-<!--        <position ctrllimited="true" ctrlrange="-0.057 -0.021" joint="vx300s_left/right_finger" kp="200"  user="1"/>-->
+    <actuator>
+            <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="80" user="1"/>
+            <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="80" user="1"/>
 
-<!--        <position ctrllimited="true" ctrlrange="0.021 0.057" joint="vx300s_right/left_finger" kp="200"  user="1"/>-->
-<!--        <position ctrllimited="true" ctrlrange="-0.057 -0.021" joint="vx300s_right/right_finger" kp="200"  user="1"/>-->
+            <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="80" user="1"/>
+            <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="80" user="1"/>
 
-<!--    </actuator>-->
+            <velocity name="vleft_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_up_joint"  kv="40"/>
+            <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>
+            <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>
+            <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>
+
+    </actuator>
 
 <!--    <keyframe>-->
-<!--        <key qpos="0 -0.96 1.16 0 -0.3 0 0.024 -0.024  0 -0.96 1.16 0 -0.3 0 0.024 -0.024  0.2 0.5 0.05 1 0 0 0"/>-->
+<!--        <key qpos="0 -0.96 1.16 0 -0.3 0 0.024 -0.024 0 -0.96 1.16 0 -0.3 0 0.024 -0.024 0.2 0.5 0.05 1 0 0 0"/>-->
 <!--    </keyframe>-->
 </mujoco>

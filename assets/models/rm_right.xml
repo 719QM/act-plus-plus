@@ -34,7 +34,18 @@
                               <inertial pos="0 0 0" mass="0.0001" diaginertia="0 0 0" />
                               <geom type="box" size="0.08 0.01 0.12" rgba="0 1 0 0" margin="0.0001" condim="3" friction="1 0.5 0.0001" solimp="0.9 .99 .0001" solref=".001 1"/>
                               <site name="site_handforcesensor4" type="cylinder" rgba="0 0 0 1" size="0.025 0.01" pos="0 0 0"/>
-                              </body>
+                                  <body name="gripper_right_up" pos="0 -0.02 0.12">
+                                    <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
+                                    <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.08 0.01 0.01" type="box" name="gripper_right_u" rgba="0 0 0 1" />
+                                    <joint axis="0 0 1" name="gripper_right_up_joint" type="slide" limited="true" range="-1 1" pos="0 0 0"/>
+                                  </body>
+
+                                  <body name="gripper_right_down" pos="0 -0.02 -0.12">
+                                    <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
+                                    <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.08 0.01 0.01" type="box" name="gripper_right_d" rgba="0 0 0 1" />
+                                    <joint axis="0 0 1" name="gripper_right_down_joint" type="slide" limited="true" range="-1 1" pos="0 0 0"/>
+                                  </body> 
+                             </body>
 
                         </body>
                     </body>

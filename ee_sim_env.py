@@ -49,6 +49,12 @@ def make_ee_sim_env(task_name):
         task = InsertionEETask(random=False)
         env = control.Environment(physics, task, time_limit=20, control_timestep=DT,
                                   n_sub_steps=None, flat_observation=False)
+    elif 'sim_RM_simpletrajectory' in task_name:
+        xml_path = os.path.join(XML_DIR, f'models/rm_bimanual_ee.xml')
+        physics = mujoco.Physics.from_xml_path(xml_path)
+        task = RMsimpletrajectoryEETask(random=False)
+        env = control.Environment(physics, task, time_limit=20, control_timestep=DT,
+                                  n_sub_steps=None, flat_observation=False)
     else:
         raise NotImplementedError
     return env
@@ -273,37 +279,121 @@ class InsertionEETask(BimanualViperXEETask):
             reward = 4
         return reward
 
-class RMsimpletrajectoryEETask(BimanualViperXEETask):
+class RMsimpletrajectoryEETask(base.Task):
     def __init__(self, random=None):
         super().__init__(random=random)
         self.max_reward = 4
 
+    def before_step(self, action, physics):
+        # 在每一步动作之前被调用。它接受动作和物理模型作为参数。动作被分为左右两部分，分别对应左右手的动作。这些动作被用来设置模拟环境中的位置和方向
+        # 动作前一半是action_left, 后一半是action_right
+        a_len = len(action) // 2
+        action_left = action[:a_len]
+        action_right = action[a_len:]
+
+        # set mocap position and quat
+        # pos(3) quat(4) gripper(1)
+        # left
+        np.copyto(physics.data.mocap_pos[0], action_left[:3])
+        np.copyto(physics.data.mocap_quat[0], action_left[3:7])
+        # right
+        np.copyto(physics.data.mocap_pos[1], action_right[:3])
+        np.copyto(physics.data.mocap_quat[1], action_right[3:7])
+
+        # set gripper
+        g_left_ctrl = PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN(action_left[7])
+        g_right_ctrl = PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN(action_right[7])
+        np.copyto(physics.data.ctrl, np.array([g_left_ctrl, -g_left_ctrl, g_right_ctrl, -g_right_ctrl]))
+    # vx300s_left/left_finger,  vx300s_left/right_finger, vx300s_right/left_finger, vx300s_right/right_finger
+
+    def initialize_robots(self, physics):
+        # 用于初始化机器人的状态。它首先重置关节位置，然后设置模拟环境中的位置和方向，最后重置夹具控制
+        # reset joint position
+        physics.named.data.qpos[:16] = START_ARM_POSE
+
+        # reset mocap to align with end effector
+        # to obtain these numbers:
+        # (1) make an ee_sim env and reset to the same start_pose
+        # (2) get env._physics.named.data.xpos['vx300s_left/gripper_link']
+        #     get env._physics.named.data.xquat['vx300s_left/gripper_link']
+        #     repeat the same for right side
+        np.copyto(physics.data.mocap_pos[0], [-0.31718881 + 0.1, 0.5, 0.29525084])
+        np.copyto(physics.data.mocap_quat[0], [1, 0, 0, 0])
+        # right
+        np.copyto(physics.data.mocap_pos[1], np.array([0.31718881 - 0.1, 0.49999888, 0.29525084]))
+        np.copyto(physics.data.mocap_quat[1], [1, 0, 0, 0])
+
+        # reset gripper control
+        close_gripper_control = np.array([
+            PUPPET_GRIPPER_POSITION_CLOSE,
+            -PUPPET_GRIPPER_POSITION_CLOSE,
+            PUPPET_GRIPPER_POSITION_CLOSE,
+            -PUPPET_GRIPPER_POSITION_CLOSE,
+        ])
+        np.copyto(physics.data.ctrl, close_gripper_control)
+
     def initialize_episode(self, physics):
         """Sets the state of the environment at the start of each episode."""
         self.initialize_robots(physics)
-        # randomize peg and socket position
-        peg_pose, socket_pose = sample_insertion_pose()
-        id2index = lambda j_id: 16 + (j_id - 16) * 7 # first 16 is robot qpos, 7 is pose dim # hacky
-
-        peg_start_id = physics.model.name2id('red_peg_joint', 'joint')
-        peg_start_idx = id2index(peg_start_id)
-        np.copyto(physics.data.qpos[peg_start_idx : peg_start_idx + 7], peg_pose)
-        # print(f"randomized cube position to {cube_position}")
-
-        socket_start_id = physics.model.name2id('blue_socket_joint', 'joint')
-        socket_start_idx = id2index(socket_start_id)
-        np.copyto(physics.data.qpos[socket_start_idx : socket_start_idx + 7], socket_pose)
+        # randomize box position
+        # 调用函数 sample_box_pose()，该函数返回一个表示盒子新位置和姿态的数组 cube_pose。
+        cube_pose = sample_box_pose()
+        # 获取与盒子关联的关节在 qpos（关节位置数组）中的起始索引。具体来说，它使用 name2id 方法，通过给定的关节名称 'red_box_joint' 查找对应的索引。'joint' 指定了查找的类别为关节。
+        box_start_idx = physics.model.name2id('red_box_joint', 'joint')
+        # 将新采样的盒子位置和姿态 (cube_pose) 复制到物理模拟的数据结构中。
+        # TODO 存疑
+        np.copyto(physics.data.qpos[box_start_idx : box_start_idx + 7], cube_pose)
         # print(f"randomized cube position to {cube_position}")
 
         super().initialize_episode(physics)
+
+    @staticmethod
+    def get_qpos(physics):
+        qpos_raw = physics.data.qpos.copy()
+        left_qpos_raw = qpos_raw[:8]
+        right_qpos_raw = qpos_raw[8:16]
+        left_arm_qpos = left_qpos_raw[:6]
+        right_arm_qpos = right_qpos_raw[:6]
+        left_gripper_qpos = [PUPPET_GRIPPER_POSITION_NORMALIZE_FN(left_qpos_raw[6])]
+        right_gripper_qpos = [PUPPET_GRIPPER_POSITION_NORMALIZE_FN(right_qpos_raw[6])]
+        return np.concatenate([left_arm_qpos, left_gripper_qpos, right_arm_qpos, right_gripper_qpos])
+
+    @staticmethod
+    def get_qvel(physics):
+        qvel_raw = physics.data.qvel.copy()
+        left_qvel_raw = qvel_raw[:8]
+        right_qvel_raw = qvel_raw[8:16]
+        left_arm_qvel = left_qvel_raw[:6]
+        right_arm_qvel = right_qvel_raw[:6]
+        left_gripper_qvel = [PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN(left_qvel_raw[6])]
+        right_gripper_qvel = [PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN(right_qvel_raw[6])]
+        return np.concatenate([left_arm_qvel, left_gripper_qvel, right_arm_qvel, right_gripper_qvel])
 
     @staticmethod
     def get_env_state(physics):
         env_state = physics.data.qpos.copy()[16:]
         return env_state
 
+    def get_observation(self, physics):
+        # note: it is important to do .copy()
+        obs = collections.OrderedDict()
+        obs['qpos'] = self.get_qpos(physics)
+        obs['qvel'] = self.get_qvel(physics)
+        obs['env_state'] = self.get_env_state(physics)
+        obs['images'] = dict()
+        obs['images']['top'] = physics.render(height=480, width=640, camera_id='top')
+        # obs['images']['angle'] = physics.render(height=480, width=640, camera_id='angle')
+        # obs['images']['vis'] = physics.render(height=480, width=640, camera_id='front_close')
+        # used in scripted policy to obtain starting pose
+        obs['mocap_pose_left'] = np.concatenate([physics.data.mocap_pos[0], physics.data.mocap_quat[0]]).copy()
+        obs['mocap_pose_right'] = np.concatenate([physics.data.mocap_pos[1], physics.data.mocap_quat[1]]).copy()
+
+        # used when replaying joint trajectory
+        obs['gripper_ctrl'] = physics.data.ctrl.copy()
+        return obs
+
     def get_reward(self, physics):
-        # return whether peg touches the pin
+        # return whether left gripper is holding the box
         all_contact_pairs = []
         for i_contact in range(physics.data.ncon):
             id_geom_1 = physics.data.contact[i_contact].geom1
@@ -313,30 +403,17 @@ class RMsimpletrajectoryEETask(BimanualViperXEETask):
             contact_pair = (name_geom_1, name_geom_2)
             all_contact_pairs.append(contact_pair)
 
-        touch_right_gripper = ("red_peg", "vx300s_right/10_right_gripper_finger") in all_contact_pairs
-        touch_left_gripper = ("socket-1", "vx300s_left/10_left_gripper_finger") in all_contact_pairs or \
-                             ("socket-2", "vx300s_left/10_left_gripper_finger") in all_contact_pairs or \
-                             ("socket-3", "vx300s_left/10_left_gripper_finger") in all_contact_pairs or \
-                             ("socket-4", "vx300s_left/10_left_gripper_finger") in all_contact_pairs
-
-        peg_touch_table = ("red_peg", "table") in all_contact_pairs
-        socket_touch_table = ("socket-1", "table") in all_contact_pairs or \
-                             ("socket-2", "table") in all_contact_pairs or \
-                             ("socket-3", "table") in all_contact_pairs or \
-                             ("socket-4", "table") in all_contact_pairs
-        peg_touch_socket = ("red_peg", "socket-1") in all_contact_pairs or \
-                           ("red_peg", "socket-2") in all_contact_pairs or \
-                           ("red_peg", "socket-3") in all_contact_pairs or \
-                           ("red_peg", "socket-4") in all_contact_pairs
-        pin_touched = ("red_peg", "pin") in all_contact_pairs
+        touch_left_gripper = ("red_box", "vx300s_left/10_left_gripper_finger") in all_contact_pairs
+        touch_right_gripper = ("red_box", "vx300s_right/10_right_gripper_finger") in all_contact_pairs
+        touch_table = ("red_box", "table") in all_contact_pairs
 
         reward = 0
-        if touch_left_gripper and touch_right_gripper: # touch both
+        if touch_right_gripper:
             reward = 1
-        if touch_left_gripper and touch_right_gripper and (not peg_touch_table) and (not socket_touch_table): # grasp both
+        if touch_right_gripper and not touch_table: # lifted
             reward = 2
-        if peg_touch_socket and (not peg_touch_table) and (not socket_touch_table): # peg and socket touching
+        if touch_left_gripper: # attempted transfer
             reward = 3
-        if pin_touched: # successful insertion
+        if touch_left_gripper and not touch_table: # successful transfer
             reward = 4
         return reward

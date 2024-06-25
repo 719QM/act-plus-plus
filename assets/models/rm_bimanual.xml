@@ -3,7 +3,13 @@
     <include file="rm_dependencies.xml"/>
 
     <worldbody>
-        <include file="rm_baselink.xml"/>
+        <include file="rm_liftlink.xml"/>
+
+        <body name="box" pos="-0.5 0 0.3">
+            <joint name="red_box_joint" type="free" frictionloss="0.01" />
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
+            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.05 0.05 0.3" type="box" name="red_box" rgba="1 0 0 0.5" />
+        </body>
     </worldbody>
 
     <actuator>
@@ -13,13 +19,19 @@
     <position name="pleft_joint_4"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_4"  kp="80"/>
     <position name="pleft_joint_5"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_5"  kp="65"/>
     <position name="pleft_joint_6"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_6"  kp="65"/>
+    <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="65"/>
+    <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="65"/>
+
     <position name="pright_joint_1"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_1" kp="80"/>
     <position name="pright_joint_2"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_2" kp="80"/>
     <position name="pright_joint_3"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_3" kp="80"/>
     <position name="pright_joint_4"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_4" kp="80"/>
     <position name="pright_joint_5"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_5" kp="65"/>
     <position name="pright_joint_6"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_6" kp="65"/>
-<!--    <position name="plift_joint"     ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"  kp="65"/> -->
+    <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="65"/>
+    <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="65"/>
+
+    <position name="plift_joint" joint="lift_joint" kp="50" ctrllimited="true" ctrlrange="0 4"/>
 
     <velocity name="vleft_joint_1"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_1"  kv="50"/>
     <velocity name="vleft_joint_2"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_2"  kv="50"/>
@@ -27,12 +39,19 @@
     <velocity name="vleft_joint_4"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_4"  kv="50"/>
     <velocity name="vleft_joint_5"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_5"  kv="50"/>
     <velocity name="vleft_joint_6"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_6"  kv="40"/>
+    <velocity name="vleft_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_up_joint"  kv="40"/>
+    <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>
+    <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>
+    <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>
+
+
     <velocity name="vright_joint_1" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_1" kv="50"/>
     <velocity name="vright_joint_2" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_2" kv="50"/>
     <velocity name="vright_joint_3" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_3" kv="50"/>
     <velocity name="vright_joint_4" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_4" kv="50"/>
     <velocity name="vright_joint_5" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_5" kv="50"/>
     <velocity name="vright_joint_6" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_6" kv="40"/>
-<!--    <velocity name="vlift_joint"    ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"        kv="40"/> -->
+
+    <velocity name="vlift_joint"    ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"        kv="40"/>
     </actuator>
 </mujoco>

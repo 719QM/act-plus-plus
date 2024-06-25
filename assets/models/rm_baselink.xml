@@ -1,7 +1,8 @@
 <mujocoinclude>
     <body name="base_link" pos="0 0 0" euler="0 0 0">
        <!-- <body name="base_link" pos="0 0 0.18" euler="euler="0 0.578 0">"> -->
-       <freejoint name="root"/>
+<!--       <freejoint name="root"/>-->
+       <joint name="lift_joint" pos="0 0 0" axis="0 0 1" type="slide" limited="true" range="0 0.185"/>
        <inertial pos="0.000669 0.002809 0.252536" mass="6.58058263" fullinertia='0.173492 0.180332 0.091131 0.000152 0.005106 -0.002'/>
        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="base_link" condim="3" margin="0.0001" friction="1 0.5 0.0001" solimp="0.9 .99 .0001" solref=".001 1"/>
 
@@ -54,6 +55,6 @@
    </body>
         <include file="rm_left.xml"/>
         <include file="rm_right.xml"/>
-        <include file="rm_liftlink.xml"/>
+<!--        <include file="rm_liftlink.xml"/>-->
    </body>
 </mujocoinclude>

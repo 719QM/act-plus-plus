@@ -1,6 +1,6 @@
 <mujocoinclude>
-      <compiler angle="radian"/>
-      <size njmax="500" nconmax="100"/>
+      <compiler angle="radian" inertiafromgeom="auto" inertiagrouprange="4 5"/>
+<!--      <size njmax="500" nconmax="100"/>-->
       <asset>
         <mesh name="base_link" file="base_link.STL"/>
         <mesh name="left_1" file="left_1.STL"/>
