@@ -13,25 +13,24 @@
     </worldbody>
 
     <actuator>
-    <position name="pleft_joint_1"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_1"  kp="80"/>
-    <position name="pleft_joint_2"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_2"  kp="80"/>
-    <position name="pleft_joint_3"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_3"  kp="80"/>
-    <position name="pleft_joint_4"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_4"  kp="80"/>
-    <position name="pleft_joint_5"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_5"  kp="65"/>
-    <position name="pleft_joint_6"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_6"  kp="65"/>
-    <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="65"/>
-    <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="65"/>
+    <position name="pleft_joint_1"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_1"  kp="800" forcelimited="true" forcerange="-150 150" user="1"/>
+    <position name="pleft_joint_2"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_2"  kp="1600" forcelimited="true" forcerange="-300 300" user="1"/>
+    <position name="pleft_joint_3"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_3"  kp="800" forcelimited="true" forcerange="-100 100" user="1"/>
+    <position name="pleft_joint_4"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_4"  kp="100" forcelimited="true" forcerange="-100 100" user="1"/>
+    <position name="pleft_joint_5"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_5"  kp="50" user="1"/>
+    <position name="pleft_joint_6"   ctrllimited="true" ctrlrange="-3.14 3.14" joint="left_joint_6"  kp="20" user="1"/>
+    <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="150" user="1"/>
+    <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="150" user="1"/>
 
-    <position name="pright_joint_1"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_1" kp="80"/>
-    <position name="pright_joint_2"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_2" kp="80"/>
-    <position name="pright_joint_3"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_3" kp="80"/>
-    <position name="pright_joint_4"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_4" kp="80"/>
-    <position name="pright_joint_5"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_5" kp="65"/>
-    <position name="pright_joint_6"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_6" kp="65"/>
-    <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="65"/>
-    <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="65"/>
+    <position name="pright_joint_1"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_1" kp="800" forcelimited="true" forcerange="-150 150" user="1"/>
+    <position name="pright_joint_2"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_2" kp="1600" forcelimited="true" forcerange="-300 300" user="1"/>
+    <position name="pright_joint_3"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_3" kp="800" forcelimited="true" forcerange="-100 100" user="1"/>
+    <position name="pright_joint_4"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_4" kp="10" forcelimited="true" forcerange="-100 100" user="1"/>
+    <position name="pright_joint_5"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_5" kp="50" user="1"/>
+    <position name="pright_joint_6"  ctrllimited="true" ctrlrange="-3.14 3.14" joint="right_joint_6" kp="20" user="1"/>
+    <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="150" user="1"/>
+    <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="150" user="1"/>
 
-    <position name="plift_joint" joint="lift_joint" kp="50" ctrllimited="true" ctrlrange="0 4"/>
 
     <velocity name="vleft_joint_1"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_1"  kv="50"/>
     <velocity name="vleft_joint_2"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_2"  kv="50"/>
@@ -52,6 +51,12 @@
     <velocity name="vright_joint_5" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_5" kv="50"/>
     <velocity name="vright_joint_6" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_6" kv="40"/>
 
-    <velocity name="vlift_joint"    ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"        kv="40"/>
+<!--    <position name="plift_joint" joint="lift_joint" kp="400" ctrllimited="true" ctrlrange="0 1"/>-->
+<!--    <velocity name="vlift_joint"    ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"        kv="90"/>-->
     </actuator>
+
+    <contact>
+      <exclude body1="base_link" body2="left_1"/>
+      <exclude body1="base_link" body2="right_1"/>
+   </contact>
 </mujoco>
