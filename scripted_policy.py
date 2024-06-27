@@ -1,5 +1,7 @@
 # 模拟环境的脚本化策略
 # 返回action
+import imageio
+
 import numpy as np
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
@@ -174,43 +176,76 @@ class RMPolicy_simpletrajectory(BasePolicy):
         box_quat = box_info[3:]
         # print(f"Generate trajectory for {box_xyz=}")
 
+        approach_quat_left = Quaternion(axis=[0.0, 0.0, 1.0], degrees=90)
+        approach_quat_right = Quaternion(axis=[0.0, 0.0, 1.0], degrees=-90)
+
+        rotate_quat_left = Quaternion(axis=[1.0, 0.0, 0.0], degrees=90)
+        rotate_quat_left = approach_quat_left * rotate_quat_left
+        rotate_quat_right = Quaternion(axis=[1.0, 0.0, 0.0], degrees=-90)
+        rotate_quat_right = approach_quat_right * rotate_quat_right
+
+
         gripper_pick_quat = Quaternion(init_mocap_pose_right[3:])
         gripper_pick_quat = gripper_pick_quat * Quaternion(axis=[0.0, 1.0, 0.0], degrees=-60)
 
         meet_left_quat = Quaternion(axis=[1.0, 0.0, 0.0], degrees=90)
 
-        meet_xyz = np.array([0, 0.5, 0.25])
+        meet_xyz = np.array([-0.2, 0.5, 0.05])
 
         self.left_trajectory = [
-            {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 0},  # sleep
-            {"t": 100, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
+            {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
             # approach meet position
-            {"t": 260, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
-            # move to meet position
-            {"t": 310, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 0},
-            # close gripper
-            {"t": 360, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
-            # move left
-            {"t": 400, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
-            # stay
+            {"t": 50, "xyz": box_xyz + np.array([0.05, 0.15, 0]), "quat": approach_quat_left.elements, "gripper": 1},
+            # rotate
+            {"t": 100, "xyz": box_xyz + np.array([0.05, 0.15, 0]), "quat": rotate_quat_left.elements, "gripper": 1},
+            {"t": 150, "xyz": box_xyz + np.array([0.05, 0.05, 0]), "quat": rotate_quat_left.elements, "gripper": 1},
+            {"t": 200, "xyz": box_xyz + np.array([0.05, 0.05, 0]), "quat": rotate_quat_left.elements, "gripper": 0},
+            {"t": 250, "xyz": box_xyz + np.array([0.05, 0.05, 0]), "quat": rotate_quat_left.elements, "gripper": 0},
+            {"t": 300, "xyz": box_xyz + np.array([0.05, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
+            {"t": 400, "xyz": box_xyz + np.array([0.05, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
+
+            # {"t": 400, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 0},  # sleep
+            # {"t": 100, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
+            # # approach meet position
+            # {"t": 260, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
+            # # move to meet position
+            # {"t": 310, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 0},
+            # # close gripper
+            # {"t": 360, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
+            # # move left
+            # {"t": 400, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
+            # # stay
         ]
 
         self.right_trajectory = [
-            {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 0},  # sleep
-            {"t": 90, "xyz": box_xyz + np.array([0, 0, 0.08]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # approach the cube
-            {"t": 130, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # go down
-            {"t": 170, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 0},
-            # close gripper
-            {"t": 200, "xyz": meet_xyz + np.array([0.05, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 0},
+            {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},  # sleep
+
             # approach meet position
-            {"t": 220, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 0},  # move to meet position
-            {"t": 310, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 1},  # open gripper
-            {"t": 360, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # move to right
-            {"t": 400, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # stay
+            {"t": 50, "xyz": box_xyz + np.array([0.05, -0.15, 0]), "quat": approach_quat_right.elements, "gripper": 1},
+            # rotate
+            {"t": 100, "xyz": box_xyz + np.array([0.05, -0.15, 0]), "quat": rotate_quat_right.elements, "gripper": 1},
+            {"t": 150, "xyz": box_xyz + np.array([0.05, -0.05, 0]), "quat": rotate_quat_right.elements, "gripper": 1},
+            {"t": 200, "xyz": box_xyz + np.array([0.05, -0.05, 0]), "quat": rotate_quat_right.elements, "gripper": 0},
+            {"t": 250, "xyz": box_xyz + np.array([0.05, -0.05, 0]), "quat": rotate_quat_right.elements, "gripper": 0},
+            {"t": 300, "xyz": box_xyz + np.array([0.05, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
+            {"t": 400, "xyz": box_xyz + np.array([0.05, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
+
+            # {"t": 400, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 0},  # sleep
+
+            # {"t": 90, "xyz": box_xyz + np.array([0, 0, 0.08]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # # approach the cube
+            # {"t": 130, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # # go down
+            # {"t": 170, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 0},
+            # # close gripper
+            # {"t": 200, "xyz": meet_xyz + np.array([0.05, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 0},
+            # # approach meet position
+            # {"t": 220, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 0},  # move to meet position
+            # {"t": 310, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 1},  # open gripper
+            # {"t": 360, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # # move to right
+            # {"t": 400, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
+            # # stay
         ]
 
 def test_policy(task_name):
@@ -224,6 +259,8 @@ def test_policy(task_name):
         env = make_ee_sim_env('sim_transfer_cube')
     elif 'sim_insertion' in task_name:
         env = make_ee_sim_env('sim_insertion')
+    elif 'sim_RM_simpletrajectory' in task_name:
+        env = make_ee_sim_env('sim_RM_simpletrajectory')
     else:
         raise NotImplementedError
 
@@ -231,19 +268,30 @@ def test_policy(task_name):
         ts = env.reset()
         episode = [ts]
         if onscreen_render:
+            # 录视频
+            # writer = imageio.get_writer(f'episode_{episode_idx}.mp4', fps=30)
             ax = plt.subplot()
             plt_img = ax.imshow(ts.observation['images']['top'])
             plt.ion()
 
-        policy = PickAndTransferPolicy(inject_noise)
+        policy = RMPolicy_simpletrajectory(inject_noise)
         for step in range(episode_len):
             action = policy(ts)
             ts = env.step(action)
+            # print(f"left_xpos:", env._physics.named.data.xpos['mocap_left'])
+            # print(f"right_xpos:", env._physics.named.data.xpos['mocap_right'])
+            # print(f"left_xquat:", env._physics.named.data.xquat['mocap_left'])
+            # print(f"right_xquat:", env._physics.named.data.xquat['mocap_right'])
+
             episode.append(ts)
             if onscreen_render:
+                image = ts.observation['images']['top']  # 假设这是图像数据
+                # writer.append_data(image)  # 将图像帧写入视频
+
                 plt_img.set_data(ts.observation['images']['top'])
                 plt.pause(0.02)
         plt.close()
+        # writer.close()
 
         episode_return = np.sum([ts.reward for ts in episode[1:]])
         if episode_return > 0:
@@ -253,6 +301,6 @@ def test_policy(task_name):
 
 
 if __name__ == '__main__':
-    test_task_name = 'sim_transfer_cube_scripted'
+    test_task_name = 'sim_RM_simpletrajectory'
     test_policy(test_task_name)
 

@@ -6,6 +6,14 @@ import os
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 DATA_DIR = '/home/juyiii/data/aloha/'
 SIM_TASK_CONFIGS = {
+    'sim_RM_simpletrajectory':{
+        'dataset_dir': DATA_DIR + '/sim_RM_simpletrajectory',
+        'num_episodes': 50,
+        'episode_len': 400,
+        # 'camera_names': ['top', 'left_wrist', 'right_wrist']
+        'camera_names': ['top']
+
+    },
     'sim_transfer_cube_scripted':{
         'dataset_dir': DATA_DIR + '/sim_transfer_cube_scripted',
         'num_episodes': 50,
@@ -66,6 +74,7 @@ DT = 0.02
 FPS = 50
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
+START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0]
 
 XML_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/assets/' # note: absolute path
 
@@ -104,3 +113,13 @@ PUPPET_POS2JOINT = lambda x: PUPPET_GRIPPER_POSITION_NORMALIZE_FN(x) * (PUPPET_G
 PUPPET_JOINT2POS = lambda x: PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN((x - PUPPET_GRIPPER_JOINT_CLOSE) / (PUPPET_GRIPPER_JOINT_OPEN - PUPPET_GRIPPER_JOINT_CLOSE))
 
 MASTER_GRIPPER_JOINT_MID = (MASTER_GRIPPER_JOINT_OPEN + MASTER_GRIPPER_JOINT_CLOSE)/2
+
+RM_GRIPPER_UP_OPEN = 0
+RM_GRIPPER_UP_CLOSE = -0.1
+RM_GRIPPER_DOWN_OPEN = 0
+RM_GRIPPER_DOWN_CLOSE = 0.1
+
+RM_GRIPPER_UP_NORMALIZE = lambda x: x * (RM_GRIPPER_UP_OPEN - RM_GRIPPER_UP_CLOSE) + RM_GRIPPER_UP_CLOSE
+RM_GRIPPER_DOWN_NORMALIZE = lambda x: x * (RM_GRIPPER_DOWN_OPEN - RM_GRIPPER_DOWN_CLOSE) + RM_GRIPPER_DOWN_CLOSE
+
+

@@ -4,13 +4,14 @@ import numpy as np
 import collections
 import os
 
-from constants import DT, XML_DIR, START_ARM_POSE
+from constants import DT, XML_DIR, START_ARM_POSE, START_ARM_POSE_RM
 from constants import PUPPET_GRIPPER_POSITION_CLOSE
 from constants import PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
+from constants import RM_GRIPPER_UP_NORMALIZE, RM_GRIPPER_DOWN_NORMALIZE
 
-from utils import sample_box_pose, sample_insertion_pose
+from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM
 from dm_control import mujoco
 from dm_control.rl import control
 from dm_control.suite import base
@@ -282,7 +283,7 @@ class InsertionEETask(BimanualViperXEETask):
 class RMsimpletrajectoryEETask(base.Task):
     def __init__(self, random=None):
         super().__init__(random=random)
-        self.max_reward = 4
+        self.max_reward = 2
 
     def before_step(self, action, physics):
         # 在每一步动作之前被调用。它接受动作和物理模型作为参数。动作被分为左右两部分，分别对应左右手的动作。这些动作被用来设置模拟环境中的位置和方向
@@ -301,15 +302,20 @@ class RMsimpletrajectoryEETask(base.Task):
         np.copyto(physics.data.mocap_quat[1], action_right[3:7])
 
         # set gripper
-        g_left_ctrl = PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN(action_left[7])
-        g_right_ctrl = PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN(action_right[7])
-        np.copyto(physics.data.ctrl, np.array([g_left_ctrl, -g_left_ctrl, g_right_ctrl, -g_right_ctrl]))
+        g_left_ctrl = RM_GRIPPER_UP_NORMALIZE(action_left[7])
+        g_right_ctrl = RM_GRIPPER_UP_NORMALIZE(action_right[7])
+        physics.data.ctrl[0] = g_left_ctrl
+        physics.data.ctrl[1] = -g_left_ctrl
+        physics.data.ctrl[2] = g_right_ctrl
+        physics.data.ctrl[3] = -g_right_ctrl
+
+        # np.copyto(physics.data.ctrl, np.array([g_left_ctrl, -g_left_ctrl, g_right_ctrl, -g_right_ctrl]))
     # vx300s_left/left_finger,  vx300s_left/right_finger, vx300s_right/left_finger, vx300s_right/right_finger
 
     def initialize_robots(self, physics):
         # 用于初始化机器人的状态。它首先重置关节位置，然后设置模拟环境中的位置和方向，最后重置夹具控制
         # reset joint position
-        physics.named.data.qpos[:16] = START_ARM_POSE
+        physics.named.data.qpos[:16] = START_ARM_POSE_RM
 
         # reset mocap to align with end effector
         # to obtain these numbers:
@@ -317,27 +323,36 @@ class RMsimpletrajectoryEETask(base.Task):
         # (2) get env._physics.named.data.xpos['vx300s_left/gripper_link']
         #     get env._physics.named.data.xquat['vx300s_left/gripper_link']
         #     repeat the same for right side
-        np.copyto(physics.data.mocap_pos[0], [-0.31718881 + 0.1, 0.5, 0.29525084])
+        np.copyto(physics.data.mocap_pos[0], [-0.5, 0.45, 0.3])
         np.copyto(physics.data.mocap_quat[0], [1, 0, 0, 0])
         # right
-        np.copyto(physics.data.mocap_pos[1], np.array([0.31718881 - 0.1, 0.49999888, 0.29525084]))
+        np.copyto(physics.data.mocap_pos[1], np.array([-0.5, -0.45, 0.3]))
         np.copyto(physics.data.mocap_quat[1], [1, 0, 0, 0])
 
         # reset gripper control
-        close_gripper_control = np.array([
-            PUPPET_GRIPPER_POSITION_CLOSE,
-            -PUPPET_GRIPPER_POSITION_CLOSE,
-            PUPPET_GRIPPER_POSITION_CLOSE,
-            -PUPPET_GRIPPER_POSITION_CLOSE,
-        ])
-        np.copyto(physics.data.ctrl, close_gripper_control)
+        # close_gripper_control = np.array([
+        #     PUPPET_GRIPPER_POSITION_CLOSE,
+        #     -PUPPET_GRIPPER_POSITION_CLOSE,
+        #     PUPPET_GRIPPER_POSITION_CLOSE,
+        #     -PUPPET_GRIPPER_POSITION_CLOSE,
+        # ])
+        # physics.data.ctrl[0] = close_gripper_control[0]
+        # physics.data.ctrl[1] = close_gripper_control[1]
+        # physics.data.ctrl[2] = close_gripper_control[2]
+        # physics.data.ctrl[3] = close_gripper_control[3]
+
+        physics.data.ctrl[0] = 0
+        physics.data.ctrl[1] = 0
+        physics.data.ctrl[2] = 0
+        physics.data.ctrl[3] = 0
+        # np.copyto(physics.data.ctrl, close_gripper_control)
 
     def initialize_episode(self, physics):
         """Sets the state of the environment at the start of each episode."""
         self.initialize_robots(physics)
         # randomize box position
         # 调用函数 sample_box_pose()，该函数返回一个表示盒子新位置和姿态的数组 cube_pose。
-        cube_pose = sample_box_pose()
+        cube_pose = sample_box_pose_RM()
         # 获取与盒子关联的关节在 qpos（关节位置数组）中的起始索引。具体来说，它使用 name2id 方法，通过给定的关节名称 'red_box_joint' 查找对应的索引。'joint' 指定了查找的类别为关节。
         box_start_idx = physics.model.name2id('red_box_joint', 'joint')
         # 将新采样的盒子位置和姿态 (cube_pose) 复制到物理模拟的数据结构中。
@@ -403,17 +418,17 @@ class RMsimpletrajectoryEETask(base.Task):
             contact_pair = (name_geom_1, name_geom_2)
             all_contact_pairs.append(contact_pair)
 
-        touch_left_gripper = ("red_box", "vx300s_left/10_left_gripper_finger") in all_contact_pairs
-        touch_right_gripper = ("red_box", "vx300s_right/10_right_gripper_finger") in all_contact_pairs
-        touch_table = ("red_box", "table") in all_contact_pairs
+        touch_left_gripper = ("gripper_left_u", "red_box") in all_contact_pairs or ("gripper_left_d", "red_box") in all_contact_pairs
+        touch_right_gripper = ("gripper_right_u", "red_box") in all_contact_pairs or ("gripper_right_d", "red_box") in all_contact_pairs
+        touch_table = ("red_box", "floortop") in all_contact_pairs
 
         reward = 0
-        if touch_right_gripper:
+        if touch_right_gripper or touch_left_gripper:
             reward = 1
-        if touch_right_gripper and not touch_table: # lifted
+        if (touch_right_gripper or touch_left_gripper) and not touch_table: # lifted
             reward = 2
-        if touch_left_gripper: # attempted transfer
-            reward = 3
-        if touch_left_gripper and not touch_table: # successful transfer
-            reward = 4
+        # if touch_left_gripper: # attempted transfer
+        #     reward = 3
+        # if touch_left_gripper and not touch_table: # successful transfer
+        #     reward = 4
         return reward

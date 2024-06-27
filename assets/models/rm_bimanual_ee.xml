@@ -3,14 +3,14 @@
     <include file="rm_dependencies.xml"/>
 
     <worldbody>
-        <include file="rm_baselink.xml"/>
+        <include file="rm_liftlink.xml"/>
 
-        <body mocap="true" name="mocap_left" pos="-0.49 0.58 0.3698701">
+        <body mocap="true" name="mocap_left" pos="-0.49 0.58 0.4">
             <site pos="0 0 0" size="0.003 0.003 0.03" type="box" name="mocap_left_site1" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.003 0.03 0.003" type="box" name="mocap_left_site2" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_left_site3" rgba="1 0 0 1"/>
         </body>
-        <body mocap="true" name="mocap_right" pos="-0.49 -0.58 0.3698701">
+        <body mocap="true" name="mocap_right" pos="-0.49 -0.58 0.4">
             <site pos="0 0 0" size="0.003 0.003 0.03" type="box" name="mocap_right_site1" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.003 0.03 0.003" type="box" name="mocap_right_site2" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_right_site3" rgba="1 0 0 1"/>
@@ -41,6 +41,11 @@
             <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>
 
     </actuator>
+
+    <contact>
+      <exclude body1="base_link" body2="left_1"/>
+      <exclude body1="base_link" body2="right_1"/>
+   </contact>
 
 <!--    <keyframe>-->
 <!--        <key qpos="0 -0.96 1.16 0 -0.3 0 0.024 -0.024 0 -0.96 1.16 0 -0.3 0 0.024 -0.024 0.2 0.5 0.05 1 0 0 0"/>-->
