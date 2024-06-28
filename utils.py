@@ -317,7 +317,7 @@ def sample_box_pose():
     return np.concatenate([cube_position, cube_quat])
 
 def sample_box_pose_RM():
-    x_range = [-0.5, -0.4]
+    x_range = [-0.4, -0.3]
     y_range = [-0.05, 0.05]
     z_range = [0.3, 0.3]
 

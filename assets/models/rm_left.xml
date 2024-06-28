@@ -7,12 +7,12 @@
 
         <body name="left_2" pos="0 0.102 -0.016461">
         <inertial pos="-0.15226 -0.0062025 0.00000060139" mass="1.95009404" fullinertia='0.0063254 0.019528 0.020527 -0.00042163 0 0'/>
-        <joint name="left_joint_2" pos="0 0 0" axis="0 0 -1" limited="true" range="-2.268928 2.268928"/>
+        <joint name="left_joint_2" pos="0 0 0" axis="0 0 1" limited="true" range="-2.268928 2.268928"/>
         <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_2"/>
 
             <body name="left_3" pos="0 0.256 0.0035251" euler="0 0 -30">
             <inertial pos="-0.0000050421 0.010569 -0.059593" mass="0.6537103"  fullinertia='0.0063737 0.0061418 0.0015648 0 0 -0.00014461'/>
-            <joint name="left_joint_3" pos="0 0 0" axis="0 0 -1" limited="true" range="-2.35619449 2.35619449"/>
+            <joint name="left_joint_3" pos="0 0 0" axis="0 0 1" limited="true" range="-2.35619449 2.35619449"/>
             <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_3"/>
 
                 <body name="left_4" pos="0 0.1285 0.013236">
@@ -22,7 +22,7 @@
 
                     <body name="left_5" pos="0 0.0815 -0.012136">
                     <inertial pos="-0.0000034542 0.0073678 -0.059382"  mass="0.49382068965" fullinertia='0.035053 0.033447 0.010492 0 0 -0.00007824'/>
-                    <joint name="left_joint_5" pos="0 0 0" axis="0 0 -1" limited="true" range="-2.234 2.234"/>
+                    <joint name="left_joint_5" pos="0 0 0" axis="0 0 1" limited="true" range="-2.234 2.234"/>
                     <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_5"/>
 
                         <body name="left_6" pos="0 0.115 0.012436">
@@ -38,13 +38,13 @@
                                   <body name="gripper_left_up" pos="0 0.02 0.12">
                                     <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
                                     <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.08 0.01 0.01" type="box" name="gripper_left_u" rgba="0 0 0 1" />
-                                    <joint axis="0 0 1" name="gripper_left_up_joint" type="slide" limited="true" range="-1 1" pos="0 0 0"/>
+                                    <joint axis="0 0 1" name="gripper_left_up_joint" type="slide" limited="true" range="-0.1 0" pos="0 0 0"/>
                                   </body>
 
                                   <body name="gripper_left_down" pos="0 0.02 -0.12">
                                     <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
                                     <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.08 0.01 0.01" type="box" name="gripper_left_d" rgba="0 0 0 1" />
-                                    <joint axis="0 0 1" name="gripper_left_down_joint" type="slide" limited="true" range="-1 1" pos="0 0 0"/>
+                                    <joint axis="0 0 1" name="gripper_left_down_joint" type="slide" limited="true" range="0 0.1" pos="0 0 0"/>
                                   </body>
                               </body>
                         </body>

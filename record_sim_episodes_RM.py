@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import h5py
 
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN, SIM_TASK_CONFIGS
+from constants import RM_GRIPPER_NORMALIZE, RM_GRIPPER_UNNORMALIZE
 from ee_sim_env import make_ee_sim_env
 from sim_env import make_sim_env, BOX_POSE
 # 需要添加用于RM的policy
@@ -71,6 +72,7 @@ def main(args):
         for step in range(episode_len):
             action = policy(ts)
             ts = env.step(action)
+            # print(ts.observation['qpos'][6])
             episode.append(ts)
             if onscreen_render:
                 plt_img.set_data(ts.observation['images'][render_cam_name])
@@ -89,8 +91,8 @@ def main(args):
         # replace gripper pose with gripper control
         gripper_ctrl_traj = [ts.observation['gripper_ctrl'] for ts in episode]
         for joint, ctrl in zip(joint_traj, gripper_ctrl_traj):
-            left_ctrl = PUPPET_GRIPPER_POSITION_NORMALIZE_FN(ctrl[0])
-            right_ctrl = PUPPET_GRIPPER_POSITION_NORMALIZE_FN(ctrl[2])
+            left_ctrl = RM_GRIPPER_NORMALIZE(ctrl[0])
+            right_ctrl = RM_GRIPPER_NORMALIZE(ctrl[2])
             joint[6] = left_ctrl
             joint[6+7] = right_ctrl
 

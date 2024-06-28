@@ -9,7 +9,7 @@ SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
         'dataset_dir': DATA_DIR + '/sim_RM_simpletrajectory',
         'num_episodes': 50,
-        'episode_len': 400,
+        'episode_len': 500,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top']
 
@@ -114,12 +114,14 @@ PUPPET_JOINT2POS = lambda x: PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN((x - PUPPET_
 
 MASTER_GRIPPER_JOINT_MID = (MASTER_GRIPPER_JOINT_OPEN + MASTER_GRIPPER_JOINT_CLOSE)/2
 
-RM_GRIPPER_UP_OPEN = 0
-RM_GRIPPER_UP_CLOSE = -0.1
-RM_GRIPPER_DOWN_OPEN = 0
-RM_GRIPPER_DOWN_CLOSE = 0.1
+RM_GRIPPER_OPEN = 0
+RM_GRIPPER_CLOSE = -0.1
 
-RM_GRIPPER_UP_NORMALIZE = lambda x: x * (RM_GRIPPER_UP_OPEN - RM_GRIPPER_UP_CLOSE) + RM_GRIPPER_UP_CLOSE
-RM_GRIPPER_DOWN_NORMALIZE = lambda x: x * (RM_GRIPPER_DOWN_OPEN - RM_GRIPPER_DOWN_CLOSE) + RM_GRIPPER_DOWN_CLOSE
+
+# x 为gripper张开的程度， 输出为gripper的位置
+RM_GRIPPER_UNNORMALIZE = lambda x: x * (RM_GRIPPER_OPEN - RM_GRIPPER_CLOSE) + RM_GRIPPER_CLOSE
+# x 为gripper的位置， 输出为gripper张开的程度
+RM_GRIPPER_NORMALIZE = lambda x: (x - RM_GRIPPER_CLOSE) / (RM_GRIPPER_OPEN - RM_GRIPPER_CLOSE)
+RM_GRIPPER_VELOCITY_NORMALIZE = lambda x: x / (RM_GRIPPER_OPEN - RM_GRIPPER_CLOSE)
 
 

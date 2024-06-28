@@ -9,7 +9,7 @@ from constants import PUPPET_GRIPPER_POSITION_CLOSE
 from constants import PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
-from constants import RM_GRIPPER_UP_NORMALIZE, RM_GRIPPER_DOWN_NORMALIZE
+from constants import RM_GRIPPER_UNNORMALIZE, RM_GRIPPER_NORMALIZE, RM_GRIPPER_VELOCITY_NORMALIZE
 
 from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM
 from dm_control import mujoco
@@ -286,6 +286,8 @@ class RMsimpletrajectoryEETask(base.Task):
         self.max_reward = 2
 
     def before_step(self, action, physics):
+        # print(f"left: ", physics.named.data.xpos['handforcesensor3'])
+        # print(f"right: ", physics.named.data.xpos['handforcesensor4'])
         # 在每一步动作之前被调用。它接受动作和物理模型作为参数。动作被分为左右两部分，分别对应左右手的动作。这些动作被用来设置模拟环境中的位置和方向
         # 动作前一半是action_left, 后一半是action_right
         a_len = len(action) // 2
@@ -302,8 +304,8 @@ class RMsimpletrajectoryEETask(base.Task):
         np.copyto(physics.data.mocap_quat[1], action_right[3:7])
 
         # set gripper
-        g_left_ctrl = RM_GRIPPER_UP_NORMALIZE(action_left[7])
-        g_right_ctrl = RM_GRIPPER_UP_NORMALIZE(action_right[7])
+        g_left_ctrl = RM_GRIPPER_UNNORMALIZE(action_left[7])
+        g_right_ctrl = RM_GRIPPER_UNNORMALIZE(action_right[7])
         physics.data.ctrl[0] = g_left_ctrl
         physics.data.ctrl[1] = -g_left_ctrl
         physics.data.ctrl[2] = g_right_ctrl
@@ -317,16 +319,17 @@ class RMsimpletrajectoryEETask(base.Task):
         # reset joint position
         physics.named.data.qpos[:16] = START_ARM_POSE_RM
 
+
         # reset mocap to align with end effector
         # to obtain these numbers:
         # (1) make an ee_sim env and reset to the same start_pose
         # (2) get env._physics.named.data.xpos['vx300s_left/gripper_link']
         #     get env._physics.named.data.xquat['vx300s_left/gripper_link']
         #     repeat the same for right side
-        np.copyto(physics.data.mocap_pos[0], [-0.5, 0.45, 0.3])
+        np.copyto(physics.data.mocap_pos[0], [-0.47, 0.57, 0.4])
         np.copyto(physics.data.mocap_quat[0], [1, 0, 0, 0])
         # right
-        np.copyto(physics.data.mocap_pos[1], np.array([-0.5, -0.45, 0.3]))
+        np.copyto(physics.data.mocap_pos[1], np.array([-0.47, -0.57, 0.4]))
         np.copyto(physics.data.mocap_quat[1], [1, 0, 0, 0])
 
         # reset gripper control
@@ -369,8 +372,8 @@ class RMsimpletrajectoryEETask(base.Task):
         right_qpos_raw = qpos_raw[8:16]
         left_arm_qpos = left_qpos_raw[:6]
         right_arm_qpos = right_qpos_raw[:6]
-        left_gripper_qpos = [PUPPET_GRIPPER_POSITION_NORMALIZE_FN(left_qpos_raw[6])]
-        right_gripper_qpos = [PUPPET_GRIPPER_POSITION_NORMALIZE_FN(right_qpos_raw[6])]
+        left_gripper_qpos = [RM_GRIPPER_NORMALIZE(left_qpos_raw[6])]
+        right_gripper_qpos = [RM_GRIPPER_NORMALIZE(right_qpos_raw[6])]
         return np.concatenate([left_arm_qpos, left_gripper_qpos, right_arm_qpos, right_gripper_qpos])
 
     @staticmethod
@@ -380,8 +383,8 @@ class RMsimpletrajectoryEETask(base.Task):
         right_qvel_raw = qvel_raw[8:16]
         left_arm_qvel = left_qvel_raw[:6]
         right_arm_qvel = right_qvel_raw[:6]
-        left_gripper_qvel = [PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN(left_qvel_raw[6])]
-        right_gripper_qvel = [PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN(right_qvel_raw[6])]
+        left_gripper_qvel = [RM_GRIPPER_VELOCITY_NORMALIZE(left_qvel_raw[6])]
+        right_gripper_qvel = [RM_GRIPPER_VELOCITY_NORMALIZE(right_qvel_raw[6])]
         return np.concatenate([left_arm_qvel, left_gripper_qvel, right_arm_qvel, right_gripper_qvel])
 
     @staticmethod
