@@ -16,7 +16,7 @@ from torchvision import transforms
 from constants import FPS
 from constants import PUPPET_GRIPPER_JOINT_OPEN
 from utils import load_data # data functions
-from utils import sample_box_pose, sample_insertion_pose # robot functions
+from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM # robot functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action # helper functions
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
 from visualize_episodes import save_videos
@@ -355,6 +355,8 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
             BOX_POSE[0] = sample_box_pose() # used in sim reset
         elif 'sim_insertion' in task_name:
             BOX_POSE[0] = np.concatenate(sample_insertion_pose()) # used in sim reset
+        elif 'sim_RM' in task_name:
+            BOX_POSE[0] = sample_box_pose_RM()
 
         ts = env.reset()  # 重置环境
 
@@ -409,7 +411,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
                 if t == 0:
                     # warm up
-                    for _ in range(10):
+                    for _ in range(1):
                         policy(qpos, curr_image)
                     print('network warm up done')
                     time1 = time.time()
@@ -603,8 +605,9 @@ def train_bc(train_dataloader, val_dataloader, config):
     for step in tqdm(range(num_steps+1)):
         # validation
         if step % validate_every == 0:
+            # 每validate_every个step，进行一次验证
             print('validating')
-            # 评估模式
+            # 验证模式
             # 对验证数据集进行遍历，对于每一批数据都会进行一次前向传播，并将结果添加到‘validation_dicts’列表中
             with torch.inference_mode():
                 policy.eval()

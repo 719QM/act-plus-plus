@@ -426,9 +426,9 @@ class RMsimpletrajectoryEETask(base.Task):
         touch_table = ("red_box", "floortop") in all_contact_pairs
 
         reward = 0
-        if touch_right_gripper or touch_left_gripper:
+        if touch_right_gripper and touch_left_gripper:
             reward = 1
-        if (touch_right_gripper or touch_left_gripper) and not touch_table: # lifted
+        if (touch_right_gripper and touch_left_gripper) and not touch_table: # lifted
             reward = 2
         # if touch_left_gripper: # attempted transfer
         #     reward = 3

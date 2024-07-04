@@ -195,12 +195,12 @@ class RMPolicy_simpletrajectory(BasePolicy):
         self.left_trajectory = [
             {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
             # approach meet position
-            {"t": 100, "xyz": box_xyz + np.array([0, 0.15, 0]), "quat": approach_quat_left.elements, "gripper": 1},
+            {"t": 100, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": approach_quat_left.elements, "gripper": 1},
             # rotate
-            {"t": 200, "xyz": box_xyz + np.array([0, 0.15, 0]), "quat": rotate_quat_left.elements, "gripper": 1},
-            {"t": 300, "xyz": box_xyz + np.array([0, 0.05, 0]), "quat": rotate_quat_left.elements, "gripper": 1},
-            {"t": 350, "xyz": box_xyz + np.array([0, 0.05, 0]), "quat": rotate_quat_left.elements, "gripper": 0},
-            {"t": 400, "xyz": box_xyz + np.array([0, 0.05, 0]), "quat": rotate_quat_left.elements, "gripper": 0},
+            {"t": 200, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 1},
+            {"t": 300, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 1},
+            {"t": 350, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
+            {"t": 400, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
             {"t": 450, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
             {"t": 500, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
 
@@ -221,12 +221,12 @@ class RMPolicy_simpletrajectory(BasePolicy):
             {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},  # sleep
 
             # approach meet position
-            {"t": 100, "xyz": box_xyz + np.array([0, -0.15, 0]), "quat": approach_quat_right.elements, "gripper": 1},
+            {"t": 100, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": approach_quat_right.elements, "gripper": 1},
             # rotate
-            {"t": 200, "xyz": box_xyz + np.array([0, -0.15, 0]), "quat": rotate_quat_right.elements, "gripper": 1},
-            {"t": 300, "xyz": box_xyz + np.array([0, -0.05, 0]), "quat": rotate_quat_right.elements, "gripper": 1},
-            {"t": 350, "xyz": box_xyz + np.array([0, -0.05, 0]), "quat": rotate_quat_right.elements, "gripper": 0},
-            {"t": 400, "xyz": box_xyz + np.array([0, -0.05, 0]), "quat": rotate_quat_right.elements, "gripper": 0},
+            {"t": 200, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 1},
+            {"t": 300, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 1},
+            {"t": 350, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
+            {"t": 400, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
             {"t": 450, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
             {"t": 500, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
 

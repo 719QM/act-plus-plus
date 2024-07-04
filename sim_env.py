@@ -244,8 +244,8 @@ class RMsimpletrajectoryTask(base.Task):
         self.max_reward = 2
 
     def before_step(self, action, physics):
-        print(f"action: ", action[7])
-        print(f"qpos: ", physics.data.qpos[8])
+        # print(f"action: ", action[7])
+        # print(f"qpos: ", physics.data.qpos[8])
         left_arm_action = action[:6]
         right_arm_action = action[7:7+6]
         normalized_left_gripper_action = action[6]
@@ -331,9 +331,9 @@ class RMsimpletrajectoryTask(base.Task):
         touch_table = ("red_box", "floortop") in all_contact_pairs
 
         reward = 0
-        if touch_right_gripper or touch_left_gripper:
+        if touch_right_gripper and touch_left_gripper:
             reward = 1
-        if (touch_right_gripper or touch_left_gripper) and not touch_table:  # lifted
+        if (touch_right_gripper and touch_left_gripper) and not touch_table:  # lifted
             reward = 2
         # if touch_left_gripper: # attempted transfer
         #     reward = 3
