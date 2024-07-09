@@ -321,6 +321,10 @@ def sample_box_pose_RM():
     y_range = [-0.15, 0.15]
     z_range = [0.2, 0.2]
 
+    # x_range = [-0.5, -0.5]
+    # y_range = [0.5, 0.5]
+    # z_range = [0.2, 0.2]
+
     ranges = np.vstack([x_range, y_range, z_range])
     cube_position = np.random.uniform(ranges[:, 0], ranges[:, 1])
 

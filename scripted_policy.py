@@ -169,6 +169,9 @@ class RMPolicy_simpletrajectory(BasePolicy):
 
     def generate_trajectory(self, ts_first):
         init_mocap_pose_right = ts_first.observation['mocap_pose_right']
+        # print(f'pos:',init_mocap_pose_right[0],init_mocap_pose_right[1],init_mocap_pose_right[2])
+
+
         init_mocap_pose_left = ts_first.observation['mocap_pose_left']
 
         box_info = np.array(ts_first.observation['env_state'])
@@ -193,6 +196,8 @@ class RMPolicy_simpletrajectory(BasePolicy):
         meet_xyz = np.array([-0.2, 0.5, 0.05])
 
         self.left_trajectory = [
+            # 搬方块
+            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
             {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
             # approach meet position
             {"t": 100, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": approach_quat_left.elements, "gripper": 1},
@@ -203,23 +208,24 @@ class RMPolicy_simpletrajectory(BasePolicy):
             {"t": 400, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
             {"t": 450, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
             {"t": 500, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
+            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            # {"t": 400, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 0},  # sleep
-            # {"t": 100, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
+            # {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
             # # approach meet position
-            # {"t": 260, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 1},
-            # # move to meet position
-            # {"t": 310, "xyz": meet_xyz + np.array([0.02, 0, -0.02]), "quat": meet_left_quat.elements, "gripper": 0},
-            # # close gripper
-            # {"t": 360, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
-            # # move left
-            # {"t": 400, "xyz": meet_xyz + np.array([-0.1, 0, -0.02]), "quat": np.array([1, 0, 0, 0]), "gripper": 0},
-            # # stay
+            # {"t": 100, "xyz": box_xyz + np.array([0+0.1, 0, 0 + 0.1]), "quat": init_mocap_pose_left[3:],
+            #  "gripper": 1},
+            # # rotate
+            # {"t": 200, "xyz": box_xyz + np.array([0+0.1, -0.2, 0 + 0.1]), "quat": init_mocap_pose_left[3:], "gripper": 1},
+            # {"t": 300, "xyz": box_xyz + np.array([0-0.1, -0.2, 0 + 0.1]), "quat": init_mocap_pose_left[3:], "gripper": 1},
+            # {"t": 500, "xyz": box_xyz + np.array([0-0.1, -0.2, 0 + 0.1]), "quat": init_mocap_pose_left[3:], "gripper": 1},
+
+
         ]
 
         self.right_trajectory = [
+            # 搬方块
+            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
             {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},  # sleep
-
             # approach meet position
             {"t": 100, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": approach_quat_right.elements, "gripper": 1},
             # rotate
@@ -229,23 +235,10 @@ class RMPolicy_simpletrajectory(BasePolicy):
             {"t": 400, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
             {"t": 450, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
             {"t": 500, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
+            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
+            # {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+            # {"t": 500, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
 
-            # {"t": 400, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 0},  # sleep
-
-            # {"t": 90, "xyz": box_xyz + np.array([0, 0, 0.08]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # # approach the cube
-            # {"t": 130, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # # go down
-            # {"t": 170, "xyz": box_xyz + np.array([0, 0, -0.015]), "quat": gripper_pick_quat.elements, "gripper": 0},
-            # # close gripper
-            # {"t": 200, "xyz": meet_xyz + np.array([0.05, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 0},
-            # # approach meet position
-            # {"t": 220, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 0},  # move to meet position
-            # {"t": 310, "xyz": meet_xyz, "quat": gripper_pick_quat.elements, "gripper": 1},  # open gripper
-            # {"t": 360, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # # move to right
-            # {"t": 400, "xyz": meet_xyz + np.array([0.1, 0, 0]), "quat": gripper_pick_quat.elements, "gripper": 1},
-            # # stay
         ]
 
 def test_policy(task_name):
@@ -264,7 +257,7 @@ def test_policy(task_name):
     else:
         raise NotImplementedError
 
-    for episode_idx in range(2):
+    for episode_idx in range(10):
         ts = env.reset()
         episode = [ts]
         if onscreen_render:
@@ -282,6 +275,12 @@ def test_policy(task_name):
             # print(f"right_xpos:", env._physics.named.data.xpos['mocap_right'])
             # print(f"left_xquat:", env._physics.named.data.xquat['mocap_left'])
             # print(f"right_xquat:", env._physics.named.data.xquat['mocap_right'])
+            # print(f"left_qpos1:",env._physics.named.data.qpos['left_joint_1'])
+            # print(f"left_qpos2:",env._physics.named.data.qpos['left_joint_2'])
+            # print(f"left_qpos3:",env._physics.named.data.qpos['left_joint_3'])
+            # print(f"left_qpos4:",env._physics.named.data.qpos['left_joint_4'])
+            # print(f"left_qpos5:",env._physics.named.data.qpos['left_joint_5'])
+            # print(f"left_qpos6:",env._physics.named.data.qpos['left_joint_6'])
 
             episode.append(ts)
             if onscreen_render:

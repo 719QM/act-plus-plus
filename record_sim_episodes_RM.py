@@ -92,7 +92,7 @@ def main(args):
         gripper_ctrl_traj = [ts.observation['gripper_ctrl'] for ts in episode]
         for joint, ctrl in zip(joint_traj, gripper_ctrl_traj):
             left_ctrl = RM_GRIPPER_NORMALIZE(ctrl[0])
-            right_ctrl = RM_GRIPPER_NORMALIZE(ctrl[2])
+            right_ctrl = RM_GRIPPER_NORMALIZE(ctrl[1])
             joint[6] = left_ctrl
             joint[6+7] = right_ctrl
 

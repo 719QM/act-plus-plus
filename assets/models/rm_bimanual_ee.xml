@@ -29,16 +29,21 @@
     </equality>
 
     <actuator>
-            <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="80" user="1"/>
-            <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="80" user="1"/>
+            <position name="pleft_gripper" ctrllimited="true" ctrlrange="0 0.06" joint="left_joint_7"  kp="200" user="1"/>
+            <position name="pright_gripper" ctrllimited="true" ctrlrange="0 0.06" joint="right_joint_7"  kp="200" user="1"/>
+            <velocity name="vleft_gripper" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_7"  kv="40"/>
+            <velocity name="vright_gripper" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_7"  kv="40"/>
 
-            <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="80" user="1"/>
-            <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="80" user="1"/>
+<!--            <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="80" user="1"/>-->
+<!--            <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="80" user="1"/>-->
 
-            <velocity name="vleft_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_up_joint"  kv="40"/>
-            <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>
-            <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>
-            <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>
+<!--            <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="80" user="1"/>-->
+<!--            <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="80" user="1"/>-->
+
+<!--            <velocity name="vleft_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_up_joint"  kv="40"/>-->
+<!--            <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>-->
+<!--            <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>-->
+<!--            <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>-->
 
     </actuator>
 

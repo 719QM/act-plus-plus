@@ -8,13 +8,17 @@
         <mesh name="left_3" file="left_3.STL"/>
         <mesh name="left_4" file="left_4.STL"/>
         <mesh name="left_5" file="left_5.STL"/>
-        <mesh name="left_61" file="left_6.STL"/>
+        <mesh name="left_6" file="left_6.STL"/>
+        <mesh name="left_61" file="left_61.STL"/>
+        <mesh name="left_7" file="left_7.STL"/>
         <mesh name="right_1" file="right_1.STL"/>
         <mesh name="right_2" file="right_2.STL"/>
         <mesh name="right_3" file="right_3.STL"/>
         <mesh name="right_4" file="right_4.STL"/>
         <mesh name="right_5" file="right_5.STL"/>
-        <mesh name="right_61" file="right_6.STL"/>
+        <mesh name="right_6" file="right_6.STL"/>
+        <mesh name="right_61" file="right_61.STL"/>
+        <mesh name="right_7" file="right_7.STL"/>
         <mesh name="lift_link" file="lift_link.STL"/>
 <!--        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512" />-->
 <!--          <texture name="texplane" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512" height="512" mark="cross" markrgb=".8 .8 .8" />-->

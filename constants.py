@@ -74,7 +74,7 @@ DT = 0.02
 FPS = 50
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
-START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0,  0, 0, 0, 0, 0, 0, 0, 0]
+START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 XML_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/assets/' # note: absolute path
 
@@ -115,7 +115,7 @@ PUPPET_JOINT2POS = lambda x: PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN((x - PUPPET_
 MASTER_GRIPPER_JOINT_MID = (MASTER_GRIPPER_JOINT_OPEN + MASTER_GRIPPER_JOINT_CLOSE)/2
 
 RM_GRIPPER_OPEN = 0
-RM_GRIPPER_CLOSE = -0.1
+RM_GRIPPER_CLOSE = 0.1
 
 
 # x 为gripper张开的程度， 输出为gripper的位置

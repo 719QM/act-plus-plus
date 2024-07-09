@@ -15,6 +15,8 @@ from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM
 from dm_control import mujoco
 from dm_control.rl import control
 from dm_control.suite import base
+from pyquaternion import Quaternion
+
 
 import IPython
 e = IPython.embed
@@ -290,6 +292,7 @@ class RMsimpletrajectoryEETask(base.Task):
         # print(f"right: ", physics.named.data.xpos['handforcesensor4'])
         # 在每一步动作之前被调用。它接受动作和物理模型作为参数。动作被分为左右两部分，分别对应左右手的动作。这些动作被用来设置模拟环境中的位置和方向
         # 动作前一半是action_left, 后一半是action_right
+        # action_left: mocap_pos[3] + mocap_quat[4] + gripper_ctrl[1]
         a_len = len(action) // 2
         action_left = action[:a_len]
         action_right = action[a_len:]
@@ -307,9 +310,7 @@ class RMsimpletrajectoryEETask(base.Task):
         g_left_ctrl = RM_GRIPPER_UNNORMALIZE(action_left[7])
         g_right_ctrl = RM_GRIPPER_UNNORMALIZE(action_right[7])
         physics.data.ctrl[0] = g_left_ctrl
-        physics.data.ctrl[1] = -g_left_ctrl
-        physics.data.ctrl[2] = g_right_ctrl
-        physics.data.ctrl[3] = -g_right_ctrl
+        physics.data.ctrl[1] = g_right_ctrl
 
         # np.copyto(physics.data.ctrl, np.array([g_left_ctrl, -g_left_ctrl, g_right_ctrl, -g_right_ctrl]))
     # vx300s_left/left_finger,  vx300s_left/right_finger, vx300s_right/left_finger, vx300s_right/right_finger
@@ -317,7 +318,8 @@ class RMsimpletrajectoryEETask(base.Task):
     def initialize_robots(self, physics):
         # 用于初始化机器人的状态。它首先重置关节位置，然后设置模拟环境中的位置和方向，最后重置夹具控制
         # reset joint position
-        physics.named.data.qpos[:16] = START_ARM_POSE_RM
+        # todo 换成小夹抓之后只有6+1+6+1个joint
+        physics.named.data.qpos[:14] = START_ARM_POSE_RM
 
 
         # reset mocap to align with end effector
@@ -326,10 +328,11 @@ class RMsimpletrajectoryEETask(base.Task):
         # (2) get env._physics.named.data.xpos['vx300s_left/gripper_link']
         #     get env._physics.named.data.xquat['vx300s_left/gripper_link']
         #     repeat the same for right side
-        np.copyto(physics.data.mocap_pos[0], [-0.47, 0.57, 0.4])
-        np.copyto(physics.data.mocap_quat[0], [1, 0, 0, 0])
+        approach_quat_left = Quaternion(axis=[0.0, 0.0, 1.0], degrees=60)
+        np.copyto(physics.data.mocap_pos[0], [-0.35, 0.53, 0.4])
+        np.copyto(physics.data.mocap_quat[0], [1,0,0,0])
         # right
-        np.copyto(physics.data.mocap_pos[1], np.array([-0.47, -0.57, 0.4]))
+        np.copyto(physics.data.mocap_pos[1], np.array([-0.35, -0.53, 0.4]))
         np.copyto(physics.data.mocap_quat[1], [1, 0, 0, 0])
 
         # reset gripper control
@@ -346,8 +349,8 @@ class RMsimpletrajectoryEETask(base.Task):
 
         physics.data.ctrl[0] = 0
         physics.data.ctrl[1] = 0
-        physics.data.ctrl[2] = 0
-        physics.data.ctrl[3] = 0
+        # physics.data.ctrl[2] = 0
+        # physics.data.ctrl[3] = 0
         # np.copyto(physics.data.ctrl, close_gripper_control)
 
     def initialize_episode(self, physics):
@@ -368,8 +371,9 @@ class RMsimpletrajectoryEETask(base.Task):
     @staticmethod
     def get_qpos(physics):
         qpos_raw = physics.data.qpos.copy()
-        left_qpos_raw = qpos_raw[:8]
-        right_qpos_raw = qpos_raw[8:16]
+        # qpos: joint[6]+gripper[1]
+        left_qpos_raw = qpos_raw[:7]
+        right_qpos_raw = qpos_raw[7:14]
         left_arm_qpos = left_qpos_raw[:6]
         right_arm_qpos = right_qpos_raw[:6]
         left_gripper_qpos = [RM_GRIPPER_NORMALIZE(left_qpos_raw[6])]
@@ -379,8 +383,8 @@ class RMsimpletrajectoryEETask(base.Task):
     @staticmethod
     def get_qvel(physics):
         qvel_raw = physics.data.qvel.copy()
-        left_qvel_raw = qvel_raw[:8]
-        right_qvel_raw = qvel_raw[8:16]
+        left_qvel_raw = qvel_raw[:7]
+        right_qvel_raw = qvel_raw[7:14]
         left_arm_qvel = left_qvel_raw[:6]
         right_arm_qvel = right_qvel_raw[:6]
         left_gripper_qvel = [RM_GRIPPER_VELOCITY_NORMALIZE(left_qvel_raw[6])]
@@ -389,7 +393,7 @@ class RMsimpletrajectoryEETask(base.Task):
 
     @staticmethod
     def get_env_state(physics):
-        env_state = physics.data.qpos.copy()[16:]
+        env_state = physics.data.qpos.copy()[14:]
         return env_state
 
     def get_observation(self, physics):

@@ -254,10 +254,10 @@ class RMsimpletrajectoryTask(base.Task):
         left_gripper_action = RM_GRIPPER_UNNORMALIZE(normalized_left_gripper_action)
         right_gripper_action = RM_GRIPPER_UNNORMALIZE(normalized_right_gripper_action)
 
-        full_left_gripper_action = [left_gripper_action, -left_gripper_action]
-        full_right_gripper_action = [right_gripper_action, -right_gripper_action]
+        full_left_gripper_action = [left_gripper_action]
+        full_right_gripper_action = [right_gripper_action]
 
-        velocity_servo = np.zeros(16)
+        velocity_servo = np.zeros(14)
         env_action = np.concatenate([left_arm_action, full_left_gripper_action, right_arm_action, full_right_gripper_action, velocity_servo])
         super().before_step(env_action, physics)
         return
@@ -267,8 +267,8 @@ class RMsimpletrajectoryTask(base.Task):
         # TODO Notice: this function does not randomize the env configuration. Instead, set BOX_POSE from outside
         # reset qpos, control and box position
         with physics.reset_context():
-            physics.named.data.qpos[:16] = START_ARM_POSE_RM
-            np.copyto(physics.data.ctrl[:16], START_ARM_POSE_RM)
+            physics.named.data.qpos[:14] = START_ARM_POSE_RM
+            np.copyto(physics.data.ctrl[:14], START_ARM_POSE_RM)
             assert BOX_POSE[0] is not None
             physics.named.data.qpos[-7:] = BOX_POSE[0]
             # print(f"{BOX_POSE=}")
@@ -277,8 +277,8 @@ class RMsimpletrajectoryTask(base.Task):
     @staticmethod
     def get_qpos(physics):
         qpos_raw = physics.data.qpos.copy()
-        left_qpos_raw = qpos_raw[:8]
-        right_qpos_raw = qpos_raw[8:16]
+        left_qpos_raw = qpos_raw[:7]
+        right_qpos_raw = qpos_raw[7:14]
         left_arm_qpos = left_qpos_raw[:6]
         right_arm_qpos = right_qpos_raw[:6]
         left_gripper_qpos = [RM_GRIPPER_NORMALIZE(left_qpos_raw[6])]
@@ -288,8 +288,8 @@ class RMsimpletrajectoryTask(base.Task):
     @staticmethod
     def get_qvel(physics):
         qvel_raw = physics.data.qvel.copy()
-        left_qvel_raw = qvel_raw[:8]
-        right_qvel_raw = qvel_raw[8:16]
+        left_qvel_raw = qvel_raw[:7]
+        right_qvel_raw = qvel_raw[7:14]
         left_arm_qvel = left_qvel_raw[:6]
         right_arm_qvel = right_qvel_raw[:6]
         left_gripper_qvel = [RM_GRIPPER_VELOCITY_NORMALIZE(left_qvel_raw[6])]
