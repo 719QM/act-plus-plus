@@ -5,7 +5,7 @@ import imageio
 import numpy as np
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
-
+from utils import increment_function
 from constants import SIM_TASK_CONFIGS
 from ee_sim_env import make_ee_sim_env
 
@@ -167,6 +167,11 @@ class InsertionPolicy(BasePolicy):
 # TODO 添加RM机械臂的类，需要修改轨迹内容
 class RMPolicy_simpletrajectory(BasePolicy):
 
+    def count_lines(filename):
+        with open(filename, 'r') as file:
+            lines = file.readlines()  # 读取所有行到一个列表
+        return len(lines)  # 返回行数
+
     def generate_trajectory(self, ts_first):
         init_mocap_pose_right = ts_first.observation['mocap_pose_right']
         # print(f'pos:',init_mocap_pose_right[0],init_mocap_pose_right[1],init_mocap_pose_right[2])
@@ -176,7 +181,7 @@ class RMPolicy_simpletrajectory(BasePolicy):
 
         box_info = np.array(ts_first.observation['env_state'])
         box_xyz = box_info[:3]
-        box_quat = box_info[3:]
+        box_quat = box_info[3:7]
         # print(f"Generate trajectory for {box_xyz=}")
 
         approach_quat_left = Quaternion(axis=[0.0, 0.0, 1.0], degrees=90)
@@ -195,69 +200,118 @@ class RMPolicy_simpletrajectory(BasePolicy):
 
         meet_xyz = np.array([-0.2, 0.5, 0.05])
 
-        self.left_trajectory = [
-            # 搬方块
-            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
-            {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
-            # approach meet position
-            {"t": 100, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": approach_quat_left.elements, "gripper": 1},
-            # rotate
-            {"t": 200, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 1},
-            {"t": 300, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 1},
-            {"t": 350, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
-            {"t": 400, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
-            {"t": 450, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
-            {"t": 500, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
-            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        forward_quat = Quaternion(axis=[0.0, 0.0, 1.0], degrees=0)
+        # print(f"policy: ",increment_function())
+        episode_number = increment_function()
+        print(f"policy: ", episode_number)
+        # 使用格式化字符串创建文件名
+        filename = f"Astar_data/output_{episode_number}.txt"
+        with open(filename, 'r') as file:
+            # 初始化行号计数器
+            line_number = 0
 
-            # {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
-            # # approach meet position
-            # {"t": 100, "xyz": box_xyz + np.array([0+0.1, 0, 0 + 0.1]), "quat": init_mocap_pose_left[3:],
-            #  "gripper": 1},
-            # # rotate
-            # {"t": 200, "xyz": box_xyz + np.array([0+0.1, -0.2, 0 + 0.1]), "quat": init_mocap_pose_left[3:], "gripper": 1},
-            # {"t": 300, "xyz": box_xyz + np.array([0-0.1, -0.2, 0 + 0.1]), "quat": init_mocap_pose_left[3:], "gripper": 1},
-            # {"t": 500, "xyz": box_xyz + np.array([0-0.1, -0.2, 0 + 0.1]), "quat": init_mocap_pose_left[3:], "gripper": 1},
+            # 获得文件行数
+            lines = file.readlines()
+            lines_total = len(lines)-2
+            print(f"The file has {lines_total} lines.")
+            # 重置文件读取到文件的开始位置
+            file.seek(0)
+
+            self.left_trajectory= [{"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},]
+            # 逐行读取文件
+            while True:
+                line = file.readline()
+                line_number += 1  # 每读取一行，行号加1
+                target_line = line.strip()
+                if target_line.startswith('target'):
+                    target_pos = list(map(float, target_line.split(':')[1].strip().split()))
+                # 如果是前两行，跳过不处理
+                if line_number <= 2:
+                    continue
+                cycle_quat = Quaternion(axis=[0.0, 0.0, 1.0], degrees=((0 + 60)/lines_total * line_number - 60))
+                if not line:  # 如果读取到文件末尾，结束循环
+                    self.left_trajectory.append({"t": 1000, "xyz":target_pos, "quat": forward_quat.elements, "gripper": 0})
+                    break
 
 
-        ]
+                # 去除行尾的换行符并分割行
+                numbers = line.strip().split()
 
-        self.right_trajectory = [
-            # 搬方块
-            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
-            {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},  # sleep
-            # approach meet position
-            {"t": 100, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": approach_quat_right.elements, "gripper": 1},
-            # rotate
-            {"t": 200, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 1},
-            {"t": 300, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 1},
-            {"t": 350, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
-            {"t": 400, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
-            {"t": 450, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
-            {"t": 500, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
-            # ////////////////////////////////////////////////////////////////////////////////////////////////////////
-            # {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
-            # {"t": 500, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+                # 检查是否有数字存在
+                if numbers:
+                    # 获取第一个数字，即列表中的第一个元素
+                    text_x = numbers[0]
+                    text_y = numbers[1]
+                    text_z = numbers[2]
 
-        ]
+                    self.left_trajectory.append({"t": line_number*10, "xyz":np.array([float(text_x), float(text_y), float(text_z)]), "quat": cycle_quat.elements, "gripper": 1})
+
+                    self.right_trajectory = [
+                        {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+                        {"t": 1000, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+                    ]
+        # self.left_trajectory =  [
+        # 搬方块
+        # ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        # {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
+        # # approach meet position
+        # {"t": 100, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": approach_quat_left.elements, "gripper": 1},
+        # # rotate
+        # {"t": 200, "xyz": box_xyz + np.array([0, 0.15, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 1},
+        # {"t": 300, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 1},
+        # {"t": 350, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
+        # {"t": 400, "xyz": box_xyz + np.array([0, 0.05, 0+0.1]), "quat": rotate_quat_left.elements, "gripper": 0},
+        # {"t": 450, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
+        # {"t": 500, "xyz": box_xyz + np.array([0, 0.05, 0.15]), "quat": rotate_quat_left.elements, "gripper": 0},
+        # ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        # {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},  # sleep
+        # # approach meet position
+        # # {"t": 100, "xyz": box_xyz + np.array([0+0.1, 0, 0]), "quat": approach_quat_left.elements,
+        # #  "gripper": 1},
+        # # # rotate
+        # # {"t": 200, "xyz": box_xyz + np.array([0, 0, 0]), "quat": approach_quat_left.elements, "gripper": 1},
+        # # {"t": 300, "xyz": box_xyz + np.array([0-0.1, 0, 0]), "quat": approach_quat_left.elements, "gripper": 1},
+        # {"t": 500, "xyz": [-0.4, 0.4, 0.2], "quat": approach_quat_left.elements, "gripper": 0},
+
+        # ]
+
+        # self.right_trajectory = [
+        #     # 搬方块
+        #     # ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #     # {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},  # sleep
+        #     # # approach meet position
+        #     # {"t": 100, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": approach_quat_right.elements, "gripper": 1},
+        #     # # rotate
+        #     # {"t": 200, "xyz": box_xyz + np.array([0, -0.15, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 1},
+        #     # {"t": 300, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 1},
+        #     # {"t": 350, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
+        #     # {"t": 400, "xyz": box_xyz + np.array([0, -0.05, 0+0.1]), "quat": rotate_quat_right.elements, "gripper": 0},
+        #     # {"t": 450, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
+        #     # {"t": 500, "xyz": box_xyz + np.array([0, -0.05, 0.15]), "quat": rotate_quat_right.elements, "gripper": 0},
+        #     # ////////////////////////////////////////////////////////////////////////////////////////////////////////
+        #     {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+        #     {"t": 1000, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+        #
+        # ]
 
 def test_policy(task_name):
     # example rolling out pick_and_transfer policy
     onscreen_render = True
     inject_noise = False
 
-    # setup the environment
-    episode_len = SIM_TASK_CONFIGS[task_name]['episode_len']
-    if 'sim_transfer_cube' in task_name:
-        env = make_ee_sim_env('sim_transfer_cube')
-    elif 'sim_insertion' in task_name:
-        env = make_ee_sim_env('sim_insertion')
-    elif 'sim_RM_simpletrajectory' in task_name:
-        env = make_ee_sim_env('sim_RM_simpletrajectory')
-    else:
-        raise NotImplementedError
-
     for episode_idx in range(10):
+        # setup the environment
+        episode_len = SIM_TASK_CONFIGS[task_name]['episode_len']
+        if 'sim_transfer_cube' in task_name:
+            env = make_ee_sim_env('sim_transfer_cube')
+        elif 'sim_insertion' in task_name:
+            env = make_ee_sim_env('sim_insertion')
+        elif 'sim_RM_simpletrajectory' in task_name:
+            env = make_ee_sim_env('sim_RM_simpletrajectory')
+        else:
+            raise NotImplementedError
+
         ts = env.reset()
         episode = [ts]
         if onscreen_render:
@@ -281,6 +335,7 @@ def test_policy(task_name):
             # print(f"left_qpos4:",env._physics.named.data.qpos['left_joint_4'])
             # print(f"left_qpos5:",env._physics.named.data.qpos['left_joint_5'])
             # print(f"left_qpos6:",env._physics.named.data.qpos['left_joint_6'])
+            # print(f"box: ",env._physics.named.data.qpos['red_box_joint'])
 
             episode.append(ts)
             if onscreen_render:

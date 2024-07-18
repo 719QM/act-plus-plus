@@ -3,25 +3,41 @@
     <include file="rm_dependencies.xml"/>
 
     <worldbody>
+        <site size="0.002" pos="-0.46 0.58 0.4" name="anchor"/>
+
         <include file="rm_liftlink.xml"/>
 
-        <body mocap="true" name="mocap_left" pos="-0.49 0.58 0.4">
+        <body mocap="true" name="mocap_left" pos="-0.46 0.57 0.41" euler="0 0 -0.1">
             <site pos="0 0 0" size="0.003 0.003 0.03" type="box" name="mocap_left_site1" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.003 0.03 0.003" type="box" name="mocap_left_site2" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_left_site3" rgba="1 0 0 1"/>
         </body>
-        <body mocap="true" name="mocap_right" pos="-0.49 -0.58 0.4">
+        <body mocap="true" name="mocap_right" pos="-0.46 -0.57 0.4">
             <site pos="0 0 0" size="0.003 0.003 0.03" type="box" name="mocap_right_site1" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.003 0.03 0.003" type="box" name="mocap_right_site2" rgba="1 0 0 1"/>
             <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_right_site3" rgba="1 0 0 1"/>
         </body>
 
-        <body name="box" pos="-0.5 0 0.2">
+        <body name="box" pos="-0.4 0.8 0.25">
             <joint name="red_box_joint" type="free" frictionloss="0.01" />
             <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
-            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.05 0.05 0.2" type="box" name="red_box" rgba="1 0 0 1" />
+            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.2 0.1 0.25" type="box" name="red_box" rgba="1 0 0 1" />
+        </body>
+
+        <body name="ball" pos = "-0.46 0.58 0.4">
+            <joint name="ball_joint" type="free" frictionloss="0.01" />
+            <geom name="ball_geom" pos="0 0 0" size="0.02" type="sphere" condim="4"  conaffinity="0" margin="0.001" solimp="0.99 0.99 0.01" solref="0.02 1" rgba="0 1 0 1"/>
+            <inertial pos="0 0 0" mass="0.01" diaginertia="0.002 0.002 0.002" />
+            <site size="0.002" pos="0 0 0" name="hook"/>
         </body>
     </worldbody>
+
+    <tendon>
+        <spatial limited="true" range="0 0.02" width="0.001">
+            <site site="hook"/>
+            <site site="anchor"/>
+        </spatial>
+    </tendon>
 
     <equality>
         <weld body1="mocap_left" body2="handforcesensor3" solref="0.01 1" solimp=".25 .25 0.001" />

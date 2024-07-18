@@ -317,19 +317,30 @@ def sample_box_pose():
     return np.concatenate([cube_position, cube_quat])
 
 def sample_box_pose_RM():
-    x_range = [-0.4, -0.3]
-    y_range = [-0.15, 0.15]
-    z_range = [0.2, 0.2]
-
-    # x_range = [-0.5, -0.5]
-    # y_range = [0.5, 0.5]
+    # x_range = [-0.4, -0.3]
+    # y_range = [-0.15, 0.15]
     # z_range = [0.2, 0.2]
+    # -0.4 0.9 0.2
+    x_range = [-0.4, -0.4]
+    y_range = [0.8, 0.8]
+    z_range = [0.25, 0.25]
 
     ranges = np.vstack([x_range, y_range, z_range])
     cube_position = np.random.uniform(ranges[:, 0], ranges[:, 1])
 
     cube_quat = np.array([1, 0, 0, 0])
     return np.concatenate([cube_position, cube_quat])
+
+def sample_ball_pose_RM():
+    x_range = [-0.65, -0.15]
+    y_range = [0.48, 0.58]
+    z_range = [0.2, 0.25]
+
+    ranges = np.vstack([x_range, y_range, z_range])
+    ball_position = np.random.uniform(ranges[:, 0], ranges[:, 1])
+
+    cube_quat = np.array([1, 0, 0, 0])
+    return np.concatenate([ball_position, cube_quat])
 def sample_insertion_pose():
     # Peg
     x_range = [0.1, 0.2]
@@ -356,7 +367,25 @@ def sample_insertion_pose():
     return peg_pose, socket_pose
 
 ### helper functions
+def increment_function():
+    if not hasattr(increment_function, 'counter'):
+        increment_function.counter = 0  # 初始化计数器
+        increment_function.call_count = 0  # 初始化调用次数计数器
 
+
+    # 检查是否达到增加数值的条件（每2次）
+    if increment_function.call_count >= 2:
+        increment_function.counter += 1  # 增加数值
+        increment_function.call_count = 0  # 重置调用次数计数器
+
+    increment_function.call_count += 1  # 每次调用函数时，调用计数加1
+
+    return increment_function.counter  # 返回当前的数值
+def increment_function_jointspace():
+        if not hasattr(increment_function_jointspace, 'counter'):
+            increment_function_jointspace.counter = -1  # 初始化计数器
+        increment_function_jointspace.counter += 1
+        return increment_function_jointspace.counter
 def compute_dict_mean(epoch_dicts):
     result = {k: None for k in epoch_dicts[0]}
     num_items = len(epoch_dicts)

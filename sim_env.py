@@ -13,6 +13,7 @@ from constants import MASTER_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
 from constants import RM_GRIPPER_UNNORMALIZE, RM_GRIPPER_NORMALIZE, RM_GRIPPER_VELOCITY_NORMALIZE
+from utils import increment_function_jointspace, sample_ball_pose_RM
 
 import IPython
 e = IPython.embed
@@ -242,10 +243,45 @@ class RMsimpletrajectoryTask(base.Task):
     def __init__(self, random=None):
         super().__init__(random=random)
         self.max_reward = 2
+        self.prev_error = np.zeros(14)
+        self.integral_error = np.zeros(14)
+
+
+    def pid_control(self, physics, action):
+        # 初始设定
+        Kp = 1.0  # 比例增益
+        Ki = 0.1  # 积分增益
+        Kd = 0.1  # 微分增益
+
+        # 获取当前关节角度
+        current_angles = np.array(physics.data.qpos[:14])
+        # 目标角度
+        target_angles = np.array(action[:14])  # 假设action是一个包含14个关节角度的数组
+        # 计算误差
+        error = target_angles - current_angles
+
+        # 计算控制信号
+        control_signal = Kp * error + Ki * self.integral_error + Kd * (error - self.prev_error)
+
+        # 更新积分误差
+        self.integral_error += error
+
+        # 更新前一次误差
+        self.prev_error = error
+
+        # 应用控制信号
+        pid_pose = current_angles + control_signal
+
+        return pid_pose
 
     def before_step(self, action, physics):
         # print(f"action: ", action[7])
         # print(f"qpos: ", physics.data.qpos[8])
+        # note 这里尝试了一下用PID控制解决关节角突变以及震动的问题，但是没有效果
+        # pid_pose = self.pid_control(physics, action)
+        # left_arm_action = pid_pose[:6]
+        # right_arm_action = pid_pose[7:7 + 6]
+
         left_arm_action = action[:6]
         right_arm_action = action[7:7+6]
         normalized_left_gripper_action = action[6]
@@ -270,8 +306,43 @@ class RMsimpletrajectoryTask(base.Task):
             physics.named.data.qpos[:14] = START_ARM_POSE_RM
             np.copyto(physics.data.ctrl[:14], START_ARM_POSE_RM)
             assert BOX_POSE[0] is not None
-            physics.named.data.qpos[-7:] = BOX_POSE[0]
-            # print(f"{BOX_POSE=}")
+            physics.named.data.qpos[-14:-7] = BOX_POSE[0]
+
+            # NOTE 如果是执行imitate_episodes.py程序，进行evaluate需要对目标小球位置进行随机采样，执行以下代码
+            # ball_pose = sample_ball_pose_RM()
+            # np.copyto(physics.named.data.qpos['ball_joint'], ball_pose)
+            # np.copyto(physics.named.model.site_pos['hook'], ball_pose[:3])
+            #
+            # np.copyto(physics.named.model.site_pos['anchor'], ball_pose[:3])
+
+            # NOTE 如果是读取txt文件读取路径，执行以下代码
+            print(f"{BOX_POSE=}")
+            episode_number = increment_function_jointspace()
+            print(f"sim_env: ", episode_number)
+            # 使用格式化字符串创建文件名
+            filename = f"Astar_data/output_{episode_number}.txt"
+            with open(filename, 'r') as file:
+                for line in file:
+                    # 去除行尾的换行符并按空格分割
+                    line = line.strip()
+                    if line.startswith('target'):
+                        target_pos = list(map(float, line.split(':')[1].strip().split()))
+                        target_quat = np.array([1, 0, 0, 0])
+                        target = np.concatenate([target_pos, target_quat])
+                        # print('target:', target)
+                        if len(target) == 7:
+                            # ball_idx = physics.model.name2id('ball_joint', 'joint')
+                            # print("ball_idx: ",ball_idx)
+                            np.copyto(physics.named.data.qpos['ball_joint'], target)
+                            # print(f"box_qpos: ", physics.named.data.qpos['ball_joint'])
+
+                            np.copyto(physics.named.model.site_pos['hook'], target_pos)
+
+                            np.copyto(physics.named.model.site_pos['anchor'], target_pos)
+
+                        else:
+                            print("Target position does not contain exactly 3 values.")
+            # print(physics.data.qpos)
         super().initialize_episode(physics)
 
     @staticmethod
@@ -305,7 +376,7 @@ class RMsimpletrajectoryTask(base.Task):
         obs['images']['top'] = physics.render(height=480, width=640, camera_id='top')
         # obs['images']['left_wrist'] = physics.render(height=480, width=640, camera_id='left_wrist')
         # obs['images']['right_wrist'] = physics.render(height=480, width=640, camera_id='right_wrist')
-        # obs['images']['angle'] = physics.render(height=480, width=640, camera_id='angle')
+        obs['images']['angle'] = physics.render(height=480, width=640, camera_id='angle')
         # obs['images']['vis'] = physics.render(height=480, width=640, camera_id='front_close')
 
         return obs
@@ -330,15 +401,33 @@ class RMsimpletrajectoryTask(base.Task):
         touch_right_gripper = ("gripper_right_u", "red_box") in all_contact_pairs or ("gripper_right_d", "red_box") in all_contact_pairs
         touch_table = ("red_box", "floortop") in all_contact_pairs
 
+        touch_gripper_ball = ("ball_geom", "left_gripper_geom") in all_contact_pairs or (
+        "ball_geom", "left_6_geom") in all_contact_pairs
+        touch_arm_box = (("red_box", "left_gripper_geom") in all_contact_pairs
+                         or ("red_box", "left_6_geom") in all_contact_pairs
+                         or ("red_box", "left_5_geom") in all_contact_pairs
+                         or ("red_box", "left_4_geom") in all_contact_pairs
+                         or ("red_box", "left_3_geom") in all_contact_pairs
+                         or ("red_box", "left_2_geom") in all_contact_pairs
+                         or ("red_box", "left_1_geom") in all_contact_pairs)
+
         reward = 0
-        if touch_right_gripper and touch_left_gripper:
-            reward = 1
-        if (touch_right_gripper and touch_left_gripper) and not touch_table:  # lifted
-            reward = 2
+        # if touch_right_gripper and touch_left_gripper:
+        #     reward = 1
+        # if (touch_right_gripper and touch_left_gripper) and not touch_table:  # lifted
+        #     reward = 2
         # if touch_left_gripper: # attempted transfer
         #     reward = 3
         # if touch_left_gripper and not touch_table: # successful transfer
         #     reward = 4
+
+        if touch_arm_box:
+            reward = -1
+        if touch_gripper_ball:
+            reward = 1
+        if touch_gripper_ball and not touch_arm_box:
+            reward = 2
+        # print(reward)
         return reward
 
 

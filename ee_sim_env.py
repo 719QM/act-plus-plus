@@ -11,7 +11,7 @@ from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
 from constants import RM_GRIPPER_UNNORMALIZE, RM_GRIPPER_NORMALIZE, RM_GRIPPER_VELOCITY_NORMALIZE
 
-from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM
+from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM, increment_function
 from dm_control import mujoco
 from dm_control.rl import control
 from dm_control.suite import base
@@ -318,7 +318,7 @@ class RMsimpletrajectoryEETask(base.Task):
     def initialize_robots(self, physics):
         # 用于初始化机器人的状态。它首先重置关节位置，然后设置模拟环境中的位置和方向，最后重置夹具控制
         # reset joint position
-        # todo 换成小夹抓之后只有6+1+6+1个joint
+        # note 换成小夹抓之后只有6+1+6+1个joint
         physics.named.data.qpos[:14] = START_ARM_POSE_RM
 
 
@@ -328,12 +328,15 @@ class RMsimpletrajectoryEETask(base.Task):
         # (2) get env._physics.named.data.xpos['vx300s_left/gripper_link']
         #     get env._physics.named.data.xquat['vx300s_left/gripper_link']
         #     repeat the same for right side
-        approach_quat_left = Quaternion(axis=[0.0, 0.0, 1.0], degrees=60)
-        np.copyto(physics.data.mocap_pos[0], [-0.35, 0.53, 0.4])
-        np.copyto(physics.data.mocap_quat[0], [1,0,0,0])
+        # x_quat = Quaternion(axis=[1.0, 0.0, 0.0],degrees=-180)
+        init_left_quat = Quaternion(axis=[0.0, 0.0, 1.0], degrees=-68)
+        # init_left_quat = init_left_quat * x_quat
+        init_right_quat = Quaternion(axis=[0.0, 0.0, 1.0], degrees=68)
+        np.copyto(physics.data.mocap_pos[0], [-0.13, 0.93, 0.4])
+        np.copyto(physics.data.mocap_quat[0], init_left_quat.elements)
         # right
-        np.copyto(physics.data.mocap_pos[1], np.array([-0.35, -0.53, 0.4]))
-        np.copyto(physics.data.mocap_quat[1], [1, 0, 0, 0])
+        np.copyto(physics.data.mocap_pos[1], np.array([-0.13, -0.93, 0.4]))
+        np.copyto(physics.data.mocap_quat[1], init_right_quat.elements)
 
         # reset gripper control
         # close_gripper_control = np.array([
@@ -360,11 +363,52 @@ class RMsimpletrajectoryEETask(base.Task):
         # 调用函数 sample_box_pose()，该函数返回一个表示盒子新位置和姿态的数组 cube_pose。
         cube_pose = sample_box_pose_RM()
         # 获取与盒子关联的关节在 qpos（关节位置数组）中的起始索引。具体来说，它使用 name2id 方法，通过给定的关节名称 'red_box_joint' 查找对应的索引。'joint' 指定了查找的类别为关节。
-        box_start_idx = physics.model.name2id('red_box_joint', 'joint')
+        # NOTE 源代码用index赋角度的方法不好
+        # box_start_idx = physics.model.name2id('red_box_joint', 'joint')
+        # print("box_start_idx: ",box_start_idx)
         # 将新采样的盒子位置和姿态 (cube_pose) 复制到物理模拟的数据结构中。
-        # TODO 存疑
-        np.copyto(physics.data.qpos[box_start_idx : box_start_idx + 7], cube_pose)
+        np.copyto(physics.named.data.qpos['red_box_joint'], cube_pose)
+        # print(f"box: ", physics.named.data.qpos['red_box_joint'])
+
         # print(f"randomized cube position to {cube_position}")
+
+        # print(f"initialize_episode: ", increment_function())
+        # 调用函数以获取当前的计数器值
+        episode_number = increment_function()
+        print(f"initialize_episode: ", episode_number)
+        # 使用格式化字符串创建文件名
+        filename = f"Astar_data/output_{episode_number}.txt"
+        with open(filename, 'r') as file:
+            for line in file:
+                # 去除行尾的换行符并按空格分割
+                line = line.strip()
+                if line.startswith('target'):
+                    target_pos = list(map(float, line.split(':')[1].strip().split()))
+                    target_quat = np.array([1, 0, 0, 0])
+                    target = np.concatenate([target_pos, target_quat])
+                    # print('target:', target)
+                    if len(target) == 7:
+                        # ball_idx = physics.model.name2id('ball_joint', 'joint')
+                        # print("ball_idx: ",ball_idx)
+                        np.copyto(physics.named.data.qpos['ball_joint'], target)
+                        print(f"ball_pos: ", physics.named.data.qpos['ball_joint'])
+
+                        np.copyto(physics.named.model.site_pos['hook'], target_pos)
+
+                        np.copyto(physics.named.model.site_pos['anchor'], target_pos)
+
+
+
+                    else:
+                        print("Target position does not contain exactly 3 values.")
+                    # line.split(':') 将字符串按 : 分割，得到 ['target', '-0.49 0.58 0.4']。
+                    # line.split(':')[1] 选择分割后数组的第二个元素，即 '-0.49 0.58 0.4'。
+                    # .strip() 去除选择元素的首尾空白字符（包括换行符）。
+                    # .split() 按空格分割处理后的字符串，得到 ['-0.49', '0.58', '0.4']。
+                    # map(float, ...) 将列表中的每个字符串元素转换成浮点数。
+                    # list(...) 将 map 对象转换成列表。
+        # print(physics.data.qpos)
+
 
         super().initialize_episode(physics)
 
@@ -404,7 +448,7 @@ class RMsimpletrajectoryEETask(base.Task):
         obs['env_state'] = self.get_env_state(physics)
         obs['images'] = dict()
         obs['images']['top'] = physics.render(height=480, width=640, camera_id='top')
-        # obs['images']['angle'] = physics.render(height=480, width=640, camera_id='angle')
+        obs['images']['angle'] = physics.render(height=480, width=640, camera_id='angle')
         # obs['images']['vis'] = physics.render(height=480, width=640, camera_id='front_close')
         # used in scripted policy to obtain starting pose
         obs['mocap_pose_left'] = np.concatenate([physics.data.mocap_pos[0], physics.data.mocap_quat[0]]).copy()
@@ -424,18 +468,35 @@ class RMsimpletrajectoryEETask(base.Task):
             name_geom_2 = physics.model.id2name(id_geom_2, 'geom')
             contact_pair = (name_geom_1, name_geom_2)
             all_contact_pairs.append(contact_pair)
+            # print(contact_pair)
 
         touch_left_gripper = ("gripper_left_u", "red_box") in all_contact_pairs or ("gripper_left_d", "red_box") in all_contact_pairs
         touch_right_gripper = ("gripper_right_u", "red_box") in all_contact_pairs or ("gripper_right_d", "red_box") in all_contact_pairs
         touch_table = ("red_box", "floortop") in all_contact_pairs
+        touch_gripper_ball = ("ball_geom", "left_gripper_geom") in all_contact_pairs or ("ball_geom","left_6_geom") in all_contact_pairs
+        touch_arm_box = (("red_box", "left_gripper_geom") in all_contact_pairs
+                         or ("red_box", "left_6_geom") in all_contact_pairs
+                         or ("red_box", "left_5_geom") in all_contact_pairs
+                         or ("red_box", "left_4_geom") in all_contact_pairs
+                         or ("red_box", "left_3_geom") in all_contact_pairs
+                         or ("red_box", "left_2_geom") in all_contact_pairs
+                         or ("red_box", "left_1_geom") in all_contact_pairs)
+
 
         reward = 0
-        if touch_right_gripper and touch_left_gripper:
-            reward = 1
-        if (touch_right_gripper and touch_left_gripper) and not touch_table: # lifted
-            reward = 2
+        # if touch_right_gripper and touch_left_gripper:
+        #     reward = 1
+        # if (touch_right_gripper and touch_left_gripper) and not touch_table: # lifted
+        #     reward = 2
         # if touch_left_gripper: # attempted transfer
         #     reward = 3
         # if touch_left_gripper and not touch_table: # successful transfer
         #     reward = 4
+        if touch_arm_box:
+            reward = -1
+        if touch_gripper_ball:
+            reward = 1
+        if touch_gripper_ball and not touch_arm_box:
+            reward = 2
+        # print(reward)
         return reward

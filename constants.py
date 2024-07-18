@@ -7,11 +7,11 @@ import os
 DATA_DIR = '/home/juyiii/data/aloha/'
 SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
-        'dataset_dir': DATA_DIR + '/sim_RM_simpletrajectory',
-        'num_episodes': 50,
-        'episode_len': 500,
+        'dataset_dir': DATA_DIR + '/sim_RM_Astar',
+        'num_episodes': 10,
+        'episode_len': 1000,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
-        'camera_names': ['top']
+        'camera_names': ['top', 'angle']
 
     },
     'sim_transfer_cube_scripted':{
@@ -74,7 +74,7 @@ DT = 0.02
 FPS = 50
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
-START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+START_ARM_POSE_RM = [0, -0.227, -0.777, -3, 0, 3, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
 
 XML_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/assets/' # note: absolute path
 

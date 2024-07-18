@@ -81,7 +81,10 @@ def main(args):
 
         episode_return = np.sum([ts.reward for ts in episode[1:]])
         episode_max_reward = np.max([ts.reward for ts in episode[1:]])
-        if episode_max_reward == env.task.max_reward:
+        episode_min_reward = np.min([ts.reward for ts in episode[1:]])
+        # print(f"ee_min:", episode_min_reward)
+
+        if (episode_max_reward == env.task.max_reward) & (episode_min_reward >= 0):
             # 如果reward是最大的，即完成了所有的动作
             print(f"{episode_idx=} Successful, {episode_return=}")
         else:
@@ -106,7 +109,7 @@ def main(args):
         # setup the environment
         print('Replaying joint commands')
         env = make_sim_env(task_name)
-        BOX_POSE[0] = subtask_info # make sure the sim_env has the same object configurations as ee_sim_env
+        BOX_POSE[0] = subtask_info[:7] # make sure the sim_env has the same object configurations as ee_sim_env
         ts = env.reset()
 
         episode_replay = [ts]
@@ -115,17 +118,18 @@ def main(args):
             ax = plt.subplot()
             plt_img = ax.imshow(ts.observation['images'][render_cam_name])
             plt.ion()
-        for t in range(len(joint_traj)): # note: this will increase episode length by 1
+        for t in range(len(joint_traj)-1): # note: this will increase episode length by 1
             action = joint_traj[t]
             ts = env.step(action)
             episode_replay.append(ts)
             if onscreen_render:
                 plt_img.set_data(ts.observation['images'][render_cam_name])
                 plt.pause(0.02)
-
         episode_return = np.sum([ts.reward for ts in episode_replay[1:]])
         episode_max_reward = np.max([ts.reward for ts in episode_replay[1:]])
-        if episode_max_reward == env.task.max_reward:
+        episode_min_reward = np.min([ts.reward for ts in episode_replay[1:]])
+        # print(f"joint_min:", episode_min_reward)
+        if (episode_max_reward == env.task.max_reward) & (episode_min_reward >= 0):
             success.append(1)
             print(f"{episode_idx=} Successful, {episode_return=}")
         else:
