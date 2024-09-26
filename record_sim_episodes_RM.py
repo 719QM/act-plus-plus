@@ -10,11 +10,11 @@ import matplotlib.pyplot as plt
 import h5py
 
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN, SIM_TASK_CONFIGS
-from constants import RM_GRIPPER_NORMALIZE, RM_GRIPPER_UNNORMALIZE
+from constants import RM_GRIPPER_NORMALIZE, SHADOW_HAND_NORMALIZE
 from ee_sim_env import make_ee_sim_env
 from sim_env import make_sim_env, BOX_POSE
 # 需要添加用于RM的policy
-from scripted_policy import PickAndTransferPolicy, InsertionPolicy, RMPolicy_simpletrajectory
+from scripted_policy import PickAndTransferPolicy, InsertionPolicy, RMPolicy_simpletrajectory, RMPolicy_fireextinguisher
 
 import IPython
 e = IPython.embed
@@ -52,6 +52,8 @@ def main(args):
         policy_cls = PickAndTransferPolicy
     elif task_name == 'sim_RM_simpletrajectory':
         policy_cls = RMPolicy_simpletrajectory
+    elif task_name == 'sim_RM_fire_extinguisher':
+        policy_cls = RMPolicy_fireextinguisher
     else:
         raise NotImplementedError
 
@@ -93,11 +95,19 @@ def main(args):
         joint_traj = [ts.observation['qpos'] for ts in episode]
         # replace gripper pose with gripper control
         gripper_ctrl_traj = [ts.observation['gripper_ctrl'] for ts in episode]
-        for joint, ctrl in zip(joint_traj, gripper_ctrl_traj):
-            left_ctrl = RM_GRIPPER_NORMALIZE(ctrl[0])
-            right_ctrl = RM_GRIPPER_NORMALIZE(ctrl[1])
-            joint[6] = left_ctrl
-            joint[6+7] = right_ctrl
+        # todo 改为灵巧手，可以写个if来判定是否是灭火器作业
+        if task_name == 'sim_RM_fire_extinguisher':
+            for joint, ctrl in zip(joint_traj, gripper_ctrl_traj):
+                left_ctrl = SHADOW_HAND_NORMALIZE(ctrl[:24])
+                right_ctrl = SHADOW_HAND_NORMALIZE(ctrl[24:48])
+                joint[6] = left_ctrl
+                joint[6+7] = right_ctrl
+        else:
+            for joint, ctrl in zip(joint_traj, gripper_ctrl_traj):
+                left_ctrl = RM_GRIPPER_NORMALIZE(ctrl[0])
+                right_ctrl = RM_GRIPPER_NORMALIZE(ctrl[1])
+                joint[6] = left_ctrl
+                joint[6+7] = right_ctrl
 
         subtask_info = episode[0].observation['env_state'].copy() # box pose at step 0
 

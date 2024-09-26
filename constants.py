@@ -2,16 +2,26 @@
 import pathlib
 import os
 
+import numpy as np
+
 ### Task parameters
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 DATA_DIR = '/home/juyiii/data/aloha/'
 SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
         'dataset_dir': DATA_DIR + '/sim_RM_Astar',
-        'num_episodes': 10,
-        'episode_len': 1000,
+        'num_episodes': 20,
+        'episode_len': 700,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top', 'angle']
+
+    },
+    'sim_RM_fire_extinguisher':{
+        'dataset_dir': DATA_DIR + '/sim_RM_fire_extinguisher',
+        'num_episodes': 20,
+        'episode_len': 500,
+        # 'camera_names': ['top', 'left_wrist', 'right_wrist']
+        'camera_names': ['top']
 
     },
     'sim_transfer_cube_scripted':{
@@ -74,7 +84,18 @@ DT = 0.02
 FPS = 50
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
-START_ARM_POSE_RM = [0, -0.227, -0.777, -3, 0, 3, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
+# START_ARM_POSE_RM = [0, -0.227, -0.777, 1.52, 0, -1.63, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
+# START_ARM_POSE_RM = [-1.61564, -0.83953, -0.21204, 0.03107, 0.51382, -1.50792, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
+START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+# START_ARM_POSE_RM = [-1.37, -0.431, -0.283, 3.11, 0.715, -1.7, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
+
+# SHADOWHAND
+LEFT_ARM_START = np.array([1.5633898, 0.27038634, -1.4091092, -2.009177, 2.0931191, -4.208923])
+RIGHT_ARM_START = np.array([0.017297983, -0.048058573, 1.2328076, -0.016972838, -2.313671, 0.12582023])
+LEFT_SHADOWHAND_START = np.zeros(24)
+RIGHT_SHADOWHAND_START = np.zeros(24)
+
+START_ARM_POSE_SHADOWHAND = np.concatenate([LEFT_ARM_START, LEFT_SHADOWHAND_START, RIGHT_ARM_START, RIGHT_SHADOWHAND_START])
 
 XML_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/assets/' # note: absolute path
 
@@ -125,3 +146,44 @@ RM_GRIPPER_NORMALIZE = lambda x: (x - RM_GRIPPER_CLOSE) / (RM_GRIPPER_OPEN - RM_
 RM_GRIPPER_VELOCITY_NORMALIZE = lambda x: x / (RM_GRIPPER_OPEN - RM_GRIPPER_CLOSE)
 
 
+# OPEN:1 CLOSED:0
+# SHADOW_HAND_OPEN = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+SHADOW_HAND_OPEN = np.zeros(24)
+SHADOW_HAND_CLOSED = np.array([0.001, 0.001, -0.112, 1.08, 1.34, 1.3, 0.001, 1.08, 1.34, 2, 0.001, 1.08, 1.34, 2, 0.001, 0.001, 1.08, 1.34,
+                      1.5, 0.001, 0.837, 0.023, 0.538, 0.0223])
+# SHADOW_HAND_UNNORMALIZE = lambda x: x * (SHADOW_HAND_OPEN - SHADOW_HAND_CLOSED) + SHADOW_HAND_CLOSED
+SHADOW_HAND_UNNORMALIZE = lambda x: [(open_val - closed_val) * x + closed_val
+                                     for open_val, closed_val
+                                     in zip(SHADOW_HAND_OPEN, SHADOW_HAND_CLOSED)]
+# SHADOW_HAND_NORMALIZE = lambda x: (x - SHADOW_HAND_CLOSED) / (SHADOW_HAND_OPEN - SHADOW_HAND_CLOSED)
+# SHADOW_HAND_VELOCITY_NORMALIZE = lambda x: x / (SHADOW_HAND_OPEN - SHADOW_HAND_CLOSED)
+# SHADOW_HAND_NORMALIZE = lambda x: [(sum(abs(x_val - closed_val)) / sum(abs(open_val - closed_val)))
+#                                    for x_val, closed_val, open_val
+#                                    in zip(x, SHADOW_HAND_CLOSED, SHADOW_HAND_OPEN)]
+# SHADOW_HAND_VELOCITY_NORMALIZE = lambda x: [(sum(abs(x_val)) / sum(abs(open_val - closed_val)))
+#                                    for x_val, closed_val, open_val
+#                                    in zip(x, SHADOW_HAND_CLOSED, SHADOW_HAND_OPEN)]
+
+
+def SHADOW_HAND_NORMALIZE(x):
+    diff_closed_open = SHADOW_HAND_OPEN - SHADOW_HAND_CLOSED
+    diff_x_closed = x - SHADOW_HAND_CLOSED
+    sum_abs_diff_closed_open = np.sum(np.abs(diff_closed_open))
+    sum_abs_diff_x_closed = np.sum(np.abs(diff_x_closed))
+
+    # 避免除以零
+    if sum_abs_diff_closed_open == 0:
+        return 0
+    else:
+        return sum_abs_diff_x_closed / sum_abs_diff_closed_open
+
+def SHADOW_HAND_VELOCITY_NORMALIZE(x):
+    diff_closed_open = SHADOW_HAND_OPEN - SHADOW_HAND_CLOSED
+    sum_abs_diff_closed_open = np.sum(np.abs(diff_closed_open))
+    sum_abs_diff_x = np.sum(np.abs(x))
+
+    # 避免除以零
+    if sum_abs_diff_closed_open == 0:
+        return 0
+    else:
+        return sum_abs_diff_x / sum_abs_diff_closed_open

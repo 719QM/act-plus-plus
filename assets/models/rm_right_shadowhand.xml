@@ -1,0 +1,60 @@
+<mujocoinclude>
+    <body name="right_1" pos="0 -0.145 0.382" euler="0 3.14 0">
+    <inertial pos="2.1376e-07 0.025186 0.021108"  mass="1.3384326" fullinertia='0.012661 0.0056135 0.011817 0 0 0.00021122'/>
+    <joint name="right_joint_1" pos="0 0 0" axis="0 1 0" limited="true" range="-3.106686 3.106686"/>
+    <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="right_1"/>
+    <site name="site_handforcesensor2" type="cylinder" rgba="0 0 0 1" size="0.025 0.01" pos="0 0 0"/>
+
+        <body name="right_2" pos="0 -0.102 -0.016461">
+        <inertial pos="0.15226 0.0062025 0.00000060139" mass="1.95009404" fullinertia='0.0063254 0.019528 0.020527 0.00042163 0 0'/>
+        <joint name="right_joint_2" pos="0 0 0" axis="0 0 1" limited="true" range="-2.268928 2.268928"/>
+        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="right_2"/>
+
+            <body name="right_3" pos="0 -0.256 0.0035251" euler="0 0 30">
+            <inertial pos="0.0000050421 -0.010569 -0.059593" mass="0.6537103"  fullinertia='0.0063737 0.0061418 0.0015648 0 0 0.00014461'/>
+            <joint name="right_joint_3" pos="0 0 0" axis="0 0 1" limited="true" range="-2.35619449 2.35619449"/>
+            <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="right_3"/>
+
+                <body name="right_4" pos="0 -0.1285 0.013236">
+                <inertial pos="0.0000011466 0.021541 -0.018041"  mass="0.540812539" fullinertia='0.028594 0.011989 0.026273 0 0 -0.000044238'/>
+                <joint name="right_joint_4" pos="0 0 0" axis="0 1 0"  limited="true" range="-3.106686 3.106686"/>
+                <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="right_4"/>
+
+                    <body name="right_5" pos="0 -0.0815 -0.012136">
+                    <inertial pos="0.0000034542 -0.0073678 -0.059382"  mass="0.493820689655" fullinertia='0.035053 0.033447 0.010492 0 0 0.00007824'/>
+                    <joint name="right_joint_5" pos="0 0 0" axis="0 0 1" limited="true" range="-2.234 2.234"/>
+                    <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="right_5"/>
+                    <include file="shadow_hand/right_hand_include.xml" />
+
+
+<!--                        <body name="right_6" pos="0.00023669 -0.115 0.012436">-->
+<!--                        <inertial pos="-0.000082 -0.071604 -0.003027"  mass="1.25327267398" fullinertia='0.1064 0.0655 0.0732 0 0 -0.000048'/>-->
+<!--                        <joint name="right_joint_6" pos="0 0 0" axis="0 1 0" limited="true" range="-6.2831853 6.2831853"/>-->
+<!--                        <geom type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="right_6" margin="0.0001" condim="3" friction="1 0.5 0.0001" solimp="0.9 .99 .0001" solref=".001 1" />-->
+
+                             <body name="handforcesensor4" pos="0 -0.157 0">
+                              <inertial pos="0 0 0" mass="0.0001" diaginertia="0 0 0" />
+                              <geom type="box" size="0.08 0.01 0.12" rgba="0 1 0 0" margin="0.0001" condim="3" friction="1 0.5 0.0001" solimp="0.9 .99 .0001" solref=".001 1"/>
+                              <site name="site_handforcesensor4" type="cylinder" rgba="0 0 0 1" size="0.025 0.01" pos="0 0 0"/>
+
+<!--                                  <body name="gripper_right_up" pos="0 -0.02 0.12">-->
+<!--                                    <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />-->
+<!--                                    <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.08 0.01 0.01" type="box" name="gripper_right_u" rgba="0 0 0 1" />-->
+<!--                                    <joint axis="0 0 1" name="gripper_right_up_joint" type="slide" limited="true" range="-0.1 0" pos="0 0 0"/>-->
+<!--                                  </body>-->
+
+<!--                                  <body name="gripper_right_down" pos="0 -0.02 -0.12">-->
+<!--                                    <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />-->
+<!--                                    <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.08 0.01 0.01" type="box" name="gripper_right_d" rgba="0 0 0 1" />-->
+<!--                                    <joint axis="0 0 1" name="gripper_right_down_joint" type="slide" limited="true" range="0 0.1" pos="0 0 0"/>-->
+<!--                                  </body> -->
+
+                             </body>
+
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+<!--    </body>-->
+</mujocoinclude>

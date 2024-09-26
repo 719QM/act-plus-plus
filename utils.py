@@ -332,15 +332,26 @@ def sample_box_pose_RM():
     return np.concatenate([cube_position, cube_quat])
 
 def sample_ball_pose_RM():
-    x_range = [-0.65, -0.15]
-    y_range = [0.48, 0.58]
-    z_range = [0.2, 0.25]
+    x_range = [-0.5, -0.3]
+    y_range = [0.38, 0.58]
+    z_range = [0.3, 0.5]
 
     ranges = np.vstack([x_range, y_range, z_range])
     ball_position = np.random.uniform(ranges[:, 0], ranges[:, 1])
 
     cube_quat = np.array([1, 0, 0, 0])
     return np.concatenate([ball_position, cube_quat])
+
+def sample_fireextinguisher_pose():
+    x_range = [0.7, 0.7]
+    y_range = [0.2, 0.2]
+    z_range = [0.008, 0.008]
+
+    ranges = np.vstack([x_range, y_range, z_range])
+    fire_extinguisher_position = np.random.uniform(ranges[:, 0], ranges[:, 1])
+
+    fire_extinguisher_quat = np.array([0.455, 0.455, -0.542, -0.542])
+    return np.concatenate([fire_extinguisher_position, fire_extinguisher_quat])
 def sample_insertion_pose():
     # Peg
     x_range = [0.1, 0.2]

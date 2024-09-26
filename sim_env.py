@@ -7,13 +7,14 @@ from dm_control import mujoco
 from dm_control.rl import control
 from dm_control.suite import base
 
-from constants import DT, XML_DIR, START_ARM_POSE, START_ARM_POSE_RM
+from constants import DT, XML_DIR, START_ARM_POSE, START_ARM_POSE_RM, START_ARM_POSE_SHADOWHAND
 from constants import PUPPET_GRIPPER_POSITION_UNNORMALIZE_FN
 from constants import MASTER_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_POSITION_NORMALIZE_FN
 from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
 from constants import RM_GRIPPER_UNNORMALIZE, RM_GRIPPER_NORMALIZE, RM_GRIPPER_VELOCITY_NORMALIZE
-from utils import increment_function_jointspace, sample_ball_pose_RM
+from constants import SHADOW_HAND_NORMALIZE, SHADOW_HAND_VELOCITY_NORMALIZE, SHADOW_HAND_UNNORMALIZE
+from utils import increment_function_jointspace, sample_fireextinguisher_pose
 
 import IPython
 e = IPython.embed
@@ -54,6 +55,12 @@ def make_sim_env(task_name):
         xml_path = os.path.join(XML_DIR, f'models/rm_bimanual.xml')
         physics = mujoco.Physics.from_xml_path(xml_path)
         task = RMsimpletrajectoryTask(random=False)
+        env = control.Environment(physics, task, time_limit=20, control_timestep=DT,
+                                  n_sub_steps=None, flat_observation=False)
+    elif 'sim_RM_fire_extinguisher' in task_name:
+        xml_path = os.path.join(XML_DIR, f'models/rm_bimanual.xml')
+        physics = mujoco.Physics.from_xml_path(xml_path)
+        task = RMFireExtinguisherTask(random=False)
         env = control.Environment(physics, task, time_limit=20, control_timestep=DT,
                                   n_sub_steps=None, flat_observation=False)
     else:
@@ -305,17 +312,19 @@ class RMsimpletrajectoryTask(base.Task):
         with physics.reset_context():
             physics.named.data.qpos[:14] = START_ARM_POSE_RM
             np.copyto(physics.data.ctrl[:14], START_ARM_POSE_RM)
-            assert BOX_POSE[0] is not None
-            physics.named.data.qpos[-14:-7] = BOX_POSE[0]
 
-            # NOTE 如果是执行imitate_episodes.py程序，进行evaluate需要对目标小球位置进行随机采样，执行以下代码
+            # NOTE 如果是执行imitate_episodes.py程序，进行evaluate需要对障碍物箱子目标小球位置进行随机采样，执行以下代码
+
+            # assert BOX_POSE[0] is not None
+            # physics.named.data.qpos[-14:-7] = BOX_POSE[0]
+            #
             # ball_pose = sample_ball_pose_RM()
             # np.copyto(physics.named.data.qpos['ball_joint'], ball_pose)
             # np.copyto(physics.named.model.site_pos['hook'], ball_pose[:3])
             #
             # np.copyto(physics.named.model.site_pos['anchor'], ball_pose[:3])
 
-            # NOTE 如果是读取txt文件读取路径，执行以下代码
+            # NOTE 如果是读取txt文件读取路径，执行以下代码读取障碍物位置以及目标小球位置
             print(f"{BOX_POSE=}")
             episode_number = increment_function_jointspace()
             print(f"sim_env: ", episode_number)
@@ -339,9 +348,18 @@ class RMsimpletrajectoryTask(base.Task):
                             np.copyto(physics.named.model.site_pos['hook'], target_pos)
 
                             np.copyto(physics.named.model.site_pos['anchor'], target_pos)
-
                         else:
                             print("Target position does not contain exactly 3 values.")
+
+                    if line.startswith('obstacle'):
+                        obstacle_pose = list(map(float, line.split(':')[1].strip().split()))
+                        obstacle_quat = np.array([1, 0, 0, 0])
+                        obstcale = np.concatenate([obstacle_pose, obstacle_quat])
+                        if len(obstcale) == 7:
+                            physics.named.data.qpos[-14:-7] = obstcale
+                        else:
+                            print("Box position does not contain exactly 3 values.")
+
             # print(physics.data.qpos)
         super().initialize_episode(physics)
 
@@ -430,8 +448,136 @@ class RMsimpletrajectoryTask(base.Task):
         # print(reward)
         return reward
 
+class RMFireExtinguisherTask(base.Task):
+    def __init__(self, random=None):
+        super().__init__(random=random)
+        self.max_reward = 2
 
 
+    def before_step(self, action, physics):
+        # print(f"action: ", action[7])
+        # print(f"qpos: ", physics.data.qpos[8])
+
+        left_arm_action = action[:6]
+        right_arm_action = action[7:7+6]
+        normalized_left_gripper_action = action[6]
+        normalized_right_gripper_action = action[7+6]
+
+        left_gripper_action = SHADOW_HAND_UNNORMALIZE(normalized_left_gripper_action)
+        right_gripper_action = SHADOW_HAND_UNNORMALIZE(normalized_right_gripper_action)
+
+        full_left_gripper_action = left_gripper_action
+        full_right_gripper_action = right_gripper_action
+
+        # velocity_servo = np.zeros(12)
+        env_action = np.concatenate([full_left_gripper_action, full_right_gripper_action, left_arm_action, right_arm_action])
+        super().before_step(env_action, physics)
+        return
+
+    def initialize_episode(self, physics):
+        """Sets the state of the environment at the start of each episode."""
+        # TODO Notice: this function does not randomize the env configuration. Instead, set BOX_POSE from outside
+        # reset qpos, control and box position
+        with physics.reset_context():
+            physics.named.data.qpos[:60] = START_ARM_POSE_SHADOWHAND
+            np.copyto(physics.data.ctrl[48:54], START_ARM_POSE_SHADOWHAND[:6])  # left_joint
+            np.copyto(physics.data.ctrl[:24], START_ARM_POSE_SHADOWHAND[6:30])  # left_hand
+            np.copyto(physics.data.ctrl[54:60], START_ARM_POSE_SHADOWHAND[30:36])  # right_joint
+            np.copyto(physics.data.ctrl[24:48], START_ARM_POSE_SHADOWHAND[36:60])  # right_hand
+
+
+        # todo 从修改box位置改为修改灭火器位置
+        fire_extinguisher_pose = sample_fireextinguisher_pose()
+        np.copyto(physics.named.data.qpos['fire_extinguisher_joint'], fire_extinguisher_pose)
+            # print(physics.data.qpos)
+        super().initialize_episode(physics)
+
+    @staticmethod
+    def get_qpos(physics):
+        qpos_raw = physics.data.qpos.copy()
+        left_qpos_raw = qpos_raw[:30]
+        right_qpos_raw = qpos_raw[30:60]
+        left_arm_qpos = left_qpos_raw[:6]
+        right_arm_qpos = right_qpos_raw[:6]
+        left_gripper_qpos = [SHADOW_HAND_NORMALIZE(left_qpos_raw[6:30])]
+        right_gripper_qpos = [SHADOW_HAND_NORMALIZE(right_qpos_raw[6:30])]
+        return np.concatenate([left_arm_qpos, left_gripper_qpos, right_arm_qpos, right_gripper_qpos])
+
+    @staticmethod
+    def get_qvel(physics):
+        qvel_raw = physics.data.qvel.copy()
+        left_qvel_raw = qvel_raw[:30]
+        right_qvel_raw = qvel_raw[30:60]
+        left_arm_qvel = left_qvel_raw[:6]
+        right_arm_qvel = right_qvel_raw[:6]
+        left_gripper_qvel = [SHADOW_HAND_VELOCITY_NORMALIZE(left_qvel_raw[6:30])]
+        right_gripper_qvel = [SHADOW_HAND_VELOCITY_NORMALIZE(right_qvel_raw[6:30])]
+        return np.concatenate([left_arm_qvel, left_gripper_qvel, right_arm_qvel, right_gripper_qvel])
+
+    def get_observation(self, physics):
+        obs = collections.OrderedDict()
+        obs['qpos'] = self.get_qpos(physics)
+        obs['qvel'] = self.get_qvel(physics)
+        obs['env_state'] = self.get_env_state(physics)
+        obs['images'] = dict()
+        obs['images']['top'] = physics.render(height=480, width=640, camera_id='top')
+        # obs['images']['left_wrist'] = physics.render(height=480, width=640, camera_id='left_wrist')
+        # obs['images']['right_wrist'] = physics.render(height=480, width=640, camera_id='right_wrist')
+        obs['images']['angle'] = physics.render(height=480, width=640, camera_id='angle')
+        # obs['images']['vis'] = physics.render(height=480, width=640, camera_id='front_close')
+
+        return obs
+
+    @staticmethod
+    def get_env_state(physics):
+        env_state = physics.data.qpos.copy()[60:]
+        return env_state
+
+    def get_reward(self, physics):
+        # return whether left gripper is holding the box
+        all_contact_pairs = []
+        for i_contact in range(physics.data.ncon):
+            id_geom_1 = physics.data.contact[i_contact].geom1
+            id_geom_2 = physics.data.contact[i_contact].geom2
+            name_geom_1 = physics.model.id2name(id_geom_1, 'geom')
+            name_geom_2 = physics.model.id2name(id_geom_2, 'geom')
+            contact_pair = (name_geom_1, name_geom_2)
+            all_contact_pairs.append(contact_pair)
+
+        touch_left_gripper = ("gripper_left_u", "red_box") in all_contact_pairs or ("gripper_left_d", "red_box") in all_contact_pairs
+        touch_right_gripper = ("gripper_right_u", "red_box") in all_contact_pairs or ("gripper_right_d", "red_box") in all_contact_pairs
+        touch_table = ("red_box", "floortop") in all_contact_pairs
+
+        touch_gripper_ball = ("ball_geom", "left_gripper_geom") in all_contact_pairs or (
+        "ball_geom", "left_6_geom") in all_contact_pairs
+        touch_arm_box = (("red_box", "left_gripper_geom") in all_contact_pairs
+                         or ("red_box", "left_6_geom") in all_contact_pairs
+                         or ("red_box", "left_5_geom") in all_contact_pairs
+                         or ("red_box", "left_4_geom") in all_contact_pairs
+                         or ("red_box", "left_3_geom") in all_contact_pairs
+                         or ("red_box", "left_2_geom") in all_contact_pairs
+                         or ("red_box", "left_1_geom") in all_contact_pairs)
+
+        reward = 0
+        # if touch_right_gripper and touch_left_gripper:
+        #     reward = 1
+        # if (touch_right_gripper and touch_left_gripper) and not touch_table:  # lifted
+        #     reward = 2
+        # if touch_left_gripper: # attempted transfer
+        #     reward = 3
+        # if touch_left_gripper and not touch_table: # successful transfer
+        #     reward = 4
+
+        if touch_arm_box:
+            reward = -1
+        if touch_gripper_ball:
+            reward = 1
+        if touch_gripper_ball and not touch_arm_box:
+            reward = 2
+        # print(reward)
+        return reward
+
+# todo 下面的两个函数，用于测试在仿真环境中的双臂控制，需要在硬件上测试，如果改成自己的硬件，需要修改函数中的参数
 def get_action(master_bot_left, master_bot_right):
     action = np.zeros(14)
     # arm action

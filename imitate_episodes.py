@@ -388,7 +388,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 ### update onscreen render and wait for DT
                 if onscreen_render:
                     # env._physics.render 获取模拟环境的渲染图像
-                    image = env._physics.render(height=480, width=640, camera_id=onscreen_cam)
+                    image = env._physics.render(height=480, width=640, camera_id=3)
                     # 更新显示的图像
                     plt_img.set_data(image)
                     plt.pause(DT)

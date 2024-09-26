@@ -1,5 +1,5 @@
 <mujocoinclude>
-      <compiler angle="radian" inertiafromgeom="auto" inertiagrouprange="4 5"/>
+      <compiler angle="radian" inertiafromgeom="auto" inertiagrouprange="4 5" autolimits="true"/>
 <!--      <size njmax="500" nconmax="100"/>-->
       <asset>
         <mesh name="base_link" file="base_link.STL"/>
@@ -25,7 +25,8 @@
 <!--          <material name="matplane" reflectance="0.3" texture="texplane" texrepeat="1 1" texuniform="true" />-->
       </asset>
       <!-- <option timestep="0.001" iterations="11" tolerance="1e-10" solver="Newton" jacobian="dense" cone="pyramidal" collision="all"/> -->
-      <option timestep="0.0005" iterations="11" tolerance="1e-10" solver="Newton" jacobian="dense" cone="pyramidal">
+<!--      <option cone="elliptic" impratio="10">-->
+        <option timestep="0.0005" iterations="11" tolerance="1e-10" solver="Newton" jacobian="dense" cone="pyramidal">
         <!-- <flag contact="disable"/> -->
       </option>
 </mujocoinclude>

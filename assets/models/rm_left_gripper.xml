@@ -15,7 +15,7 @@
             <joint name="left_joint_3" pos="0 0 0" axis="0 0 1" limited="true" range="-2.35619449 2.35619449"/>
             <geom name="left_3_geom" type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_3"/>
 
-                <body name="left_4" pos="0 0.1285 0.013236">
+                <body name="left_4" pos="0 0.1285 0.013236" euler="0 0 0">
                 <inertial pos="-0.0000011466 -0.021541 -0.018041"  mass="0.540812539184" fullinertia='0.028594 0.011989 0.026273 0 0 0.000044238'/>
                 <joint name="left_joint_4" pos="0 0 0" axis="0 1 0" limited="true" range="-3.106686 3.106686"/>
                 <geom name="left_4_geom" type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_4"/>
@@ -25,12 +25,12 @@
                     <joint name="left_joint_5" pos="0 0 0" axis="0 0 1" limited="true" range="-2.234 2.234"/>
                     <geom name="left_5_geom" type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_5"/>
 
-                        <body name="left_6" pos="0 0.115 0.012436">
+                        <body name="left_6" pos="0 0.115 0.012436" euler="0 -1.57 0">
                         <inertial pos="0.000082 0.071604 -0.003027"  mass="1.25327267398" fullinertia='0.1064 0.0655 0.0732 0 0 0.000048'/>
                         <joint name="left_joint_6" pos="0 0 0" axis="0 1 0" limited="true" range="-6.2831853 6.2831853"/>
                         <geom name="left_6_geom" type="mesh" rgba="0.792157 0.819608 0.933333 1" mesh="left_61" margin="0.0001" condim="3" friction="1 0.5 0.0001" solimp="0.9 .99 .0001" solref=".001 1" />
 
-                              <body name="handforcesensor3" pos="0 0.1 0.005">
+                              <body name="handforcesensor3" pos="0 0.1 0.005" >
                               <inertial pos="0 0 0" mass="0.0001" diaginertia="0 0 0" />
                               <geom type="box" size="0.08 0.01 0.12" rgba="0 1 0 0" margin="0.0001" condim="3" friction="1 0.5 0.0001" solimp="0.9 .99 .0001" solref=".001 1"/>
                               <site name="site_handforcesensor3" type="cylinder" rgba="0 0 0 1" size="0.025 0.01" pos="0 0 0"/>

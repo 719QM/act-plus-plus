@@ -1,0 +1,39 @@
+<mujocoinclude>
+
+ <asset>
+    <material name="black" specular="0.5" shininess="0.25" rgba="0.16355 0.16355 0.16355 1"/>
+    <material name="gray" specular="0.0" shininess="0.25" rgba="0.80848 0.80848 0.80848 1"/>
+    <material name="metallic" specular="0" shininess="0.25" rgba="0.9 0.9 0.9 1"/>
+    <material name="red" specular="0.5" shininess="0.25" rgba="0.69 0.13333 0.133333 1"/>
+
+
+    <mesh class="left_hand" file="shadow_hand/assets/forearm_0.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/forearm_1.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/forearm_collision.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/wrist.obj" scale="-0.001 0.001 0.001"/>
+    <mesh class="left_hand" file="shadow_hand/assets/palm.obj" scale="-0.001 0.001 0.001"/>
+    <mesh class="left_hand" file="shadow_hand/assets/f_knuckle.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/f_proximal.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/f_middle.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/f_distal_pst.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/lf_metacarpal.obj" scale="-0.001 0.001 0.001"/>
+    <mesh class="left_hand" file="shadow_hand/assets/th_proximal.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/th_middle.obj"/>
+    <mesh class="left_hand" file="shadow_hand/assets/th_distal_pst.obj"/>
+
+    <mesh class="right_hand" file="shadow_hand/assets/forearm_0.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/forearm_1.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/forearm_collision.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/wrist.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/palm.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/f_knuckle.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/f_proximal.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/f_middle.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/f_distal_pst.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/lf_metacarpal.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/th_proximal.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/th_middle.obj"/>
+    <mesh class="right_hand" file="shadow_hand/assets/th_distal_pst.obj"/>
+  </asset>
+
+</mujocoinclude>
