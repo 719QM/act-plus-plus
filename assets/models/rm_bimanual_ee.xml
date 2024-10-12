@@ -32,7 +32,7 @@
 
         <body name="ball" pos = "-0.46 0.58 0.4">
             <joint name="ball_joint" type="free" frictionloss="0.01" />
-            <geom name="ball_geom" pos="0 0 0" size="0.02" type="sphere" condim="4"  conaffinity="0" margin="0.001" solimp="0.99 0.99 0.01" solref="0.02 1" rgba="0 1 0 1"/>
+            <geom name="ball_geom" pos="0 0 0" size="0.03" type="sphere" condim="4"  conaffinity="0" margin="0.001" solimp="0.99 0.99 0.01" solref="0.02 1" rgba="0 1 0 1"/>
             <inertial pos="0 0 0" mass="0.01" diaginertia="0.002 0.002 0.002" />
             <site size="0.002" pos="0 0 0" name="hook"/>
         </body>

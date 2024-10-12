@@ -1,5 +1,5 @@
 <mujocoinclude>
-    <body name="base_link" pos="0 0 0.35" euler="0 0 0">
+    <body name="base_link" pos="0 0 0" euler="0 0 0">
        <!-- <body name="base_link" pos="0 0 0.18" euler="euler="0 0.578 0">"> -->
 <!--       <freejoint name="root"/>-->
 <!--       <joint name="lift_joint" pos="0 0 0" axis="0 0 1" type="slide" limited="true" range="0 0.185"/>-->

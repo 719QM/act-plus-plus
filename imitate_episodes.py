@@ -171,7 +171,7 @@ def main(args):
         results = []
         for ckpt_name in ckpt_names:
             # 使用eval_bc函数进行评估，返回值为成功率和平均回报，将这些值存储在results中
-            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=10)
+            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=1)
             # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
             results.append([ckpt_name, success_rate, avg_return])
 
@@ -376,6 +376,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         qpos_list = []
         target_qpos_list = []
         rewards = []
+        end_effector_positions = []
         # if use_actuator_net:
         #     norm_episode_all_base_actions = [actuator_norm(np.zeros(history_len, 2)).tolist()]
         # 进入小循环： 对于每个时间步，它先获取当前的观察结果（包括图像和机器人关节位置），然后查询策略以获取动作
@@ -401,9 +402,14 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 else:
                     image_list.append({'main': obs['image']})
                 qpos_numpy = np.array(obs['qpos'])
+                print(f"qpos_pre: ", qpos_numpy)
                 qpos_history_raw[t] = qpos_numpy
                 qpos = pre_process(qpos_numpy)
                 qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+                end_effector_position = np.array(obs['position'])  # 从obs中读取机械臂末端位置
+                # print(f"end_effector:", end_effector_position)
+                end_effector_positions.append(end_effector_position)  # 将位置存储到列表中
+
                 # qpos_history[:, t] = qpos
                 if t % query_frequency == 0:
                     curr_image = get_image(ts, camera_names, rand_crop_resize=(config['policy_class'] == 'Diffusion'))
@@ -411,6 +417,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
                 if t == 0:
                     # warm up
+                    # 循环执行一次，但不会使用循环中的变量
                     for _ in range(1):
                         policy(qpos, curr_image)
                     print('network warm up done')
@@ -471,6 +478,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 raw_action = raw_action.squeeze(0).cpu().numpy()
                 action = post_process(raw_action)
                 target_qpos = action[:-2]
+                print(f"qpos_target: ", target_qpos)
 
                 # if use_actuator_net:
                 #     assert(not temporal_agg)
@@ -506,7 +514,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 # time.sleep(max(0, DT - duration - culmulated_delay))
                 if duration >= DT:
                     culmulated_delay += (duration - DT)
-                    print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
+                    # print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
                 # else:
                 #     culmulated_delay = max(0, culmulated_delay - (DT - duration))
 
@@ -538,8 +546,15 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         highest_rewards.append(episode_highest_reward)
         print(f'Rollout {rollout_id}\n{episode_return=}, {episode_highest_reward=}, {env_max_reward=}, Success: {episode_highest_reward==env_max_reward}')
 
-        # if save_episode:
-        #     save_videos(image_list, DT, video_path=os.path.join(ckpt_dir, f'video{rollout_id}.mp4'))
+        if save_episode:
+            save_videos(image_list, DT, video_path=os.path.join(ckpt_dir, f'video{rollout_id}.mp4'))
+        # 将末端执行器位置存储到文本文件中
+        output_file = os.path.join(ckpt_dir, 'end_effector_position.txt')
+        with open(output_file, 'w') as f:
+            for position in end_effector_positions:
+                f.write(f"{position}\n")
+        print(f"End effector position has been saved in {ckpt_dir}/end_effector_position.txt")
+
 
     # 所有50个回合结束后，计算成功率与平均回报
     success_rate = np.mean(np.array(highest_rewards) == env_max_reward)

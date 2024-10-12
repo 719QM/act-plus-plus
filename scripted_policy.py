@@ -3,6 +3,7 @@
 import imageio
 import math
 
+import numpy
 import numpy as np
 import matplotlib.pyplot as plt
 from pyquaternion import Quaternion
@@ -191,42 +192,32 @@ class RMPolicy_simpletrajectory(BasePolicy):
         init_mocap_pose_right = ts_first.observation['mocap_pose_right']
         # print(f'pos:',init_mocap_pose_right[0],init_mocap_pose_right[1],init_mocap_pose_right[2])
 
-
         init_mocap_pose_left = ts_first.observation['mocap_pose_left']
         init_quat_left = Quaternion(init_mocap_pose_left[3:])
+
+        target_quat_left = Quaternion([1, 0, 0, 0])
+        # 构造表示绕 z 轴旋转的四元数
+        rotate_z = Quaternion(axis=[0, 0, 1], angle=0.4)
+        rotate_y = Quaternion(axis=[0, 1, 0], angle=0.3) #正是向上抬
+        target_quat_left = target_quat_left * rotate_z
+        # print(f"target_quat: ",target_quat_left)
 
         box_info = np.array(ts_first.observation['env_state'])
         box_xyz = box_info[:3]
         box_quat = box_info[3:7]
         # print(f"Generate trajectory for {box_xyz=}")
 
-        # approach_quat_left = Quaternion(axis=[0.0, 0.0, 1.0], degrees=90)
-        # approach_quat_right = Quaternion(axis=[0.0, 0.0, 1.0], degrees=-90)
+        # forward_quat = Quaternion(axis=[0.0, 0.0, 1.0], degrees=0)
+        # #
+        # # euler = [0, -1, 0]
+        # # R = self.rpy2R(euler)
+        # # test_quat = Quaternion._from_matrix(R)
         #
-        # rotate_quat_left = Quaternion(axis=[1.0, 0.0, 0.0], degrees=90)
-        # rotate_quat_left = approach_quat_left * rotate_quat_left
-        # rotate_quat_right = Quaternion(axis=[1.0, 0.0, 0.0], degrees=-90)
-        # rotate_quat_right = approach_quat_right * rotate_quat_right
+        # target_euler=[0, -1.3, 0]
+        # target_R = self.rpy2R(target_euler)
+        # target_Q = Quaternion._from_matrix(target_R)
         #
-        #
-        # gripper_pick_quat = Quaternion(init_mocap_pose_right[3:])
-        # gripper_pick_quat = gripper_pick_quat * Quaternion(axis=[0.0, 1.0, 0.0], degrees=-60)
-        #
-        # meet_left_quat = Quaternion(axis=[1.0, 0.0, 0.0], degrees=90)
-        #
-        # meet_xyz = np.array([-0.2, 0.5, 0.05])
-
-        forward_quat = Quaternion(axis=[0.0, 0.0, 1.0], degrees=0)
-        #
-        # euler = [0, -1, 0]
-        # R = self.rpy2R(euler)
-        # test_quat = Quaternion._from_matrix(R)
-
-        target_euler=[0, -1.3, 0]
-        target_R = self.rpy2R(target_euler)
-        target_Q = Quaternion._from_matrix(target_R)
-
-        init_euler = [0, -1, -1.57]
+        # init_euler = [0, -1, -1.57]
         # print(f"policy: ",increment_function())
         episode_number = increment_function()
         print(f"policy: ", episode_number)
@@ -243,50 +234,39 @@ class RMPolicy_simpletrajectory(BasePolicy):
             # 重置文件读取到文件的开始位置
             file.seek(0)
 
-            # self.left_trajectory= [{"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},]
-            # # 逐行读取文件
-            # while True:
-            #     line = file.readline()
-            #     line_number += 1  # 每读取一行，行号加1
-            #     target_line = line.strip()
-            #     if target_line.startswith('target'):
-            #         target_pos = list(map(float, target_line.split(':')[1].strip().split()))
-            #     # 如果是前3行，跳过不处理
-            #     if line_number <= 3:
-            #         continue
-            #     process_euler = [(target - init)/lines_total * line_number + init for target, init in zip(target_euler, init_euler)]
-            #     process_R = self.rpy2R(process_euler)
-            #     process_Q = Quaternion._from_matrix(process_R)
-            #
-            #     # cycle_quat = Quaternion(axis=[1.0, 0.0, 0.0], degrees=(60/lines_total * line_number))
-            #     # cycle_quat = init_quat_left * cycle_quat
-            #     # final_quat = init_quat_left * Quaternion(axis=[1.0, 0.0, 0.0], degrees=60)
-            #
-            #     if not line:  # 如果读取到文件末尾，结束循环
-            #         self.left_trajectory.append({"t": 700, "xyz":target_pos, "quat": target_Q.elements, "gripper": 0})
-            #         break
-            #
-            #     #
-            #     # 去除行尾的换行符并分割行
-            #     numbers = line.strip().split()
-            #
-            #     # 检查是否有数字存在
-            #     if numbers:
-            #         # 获取第一个数字，即列表中的第一个元素
-            #         text_x = numbers[0]
-            #         text_y = numbers[1]
-            #         text_z = numbers[2]
-            #
-            #         self.left_trajectory.append({"t": line_number*10, "xyz":np.array([float(text_x), float(text_y), float(text_z)]), "quat": process_Q.elements, "gripper": 1})
+            self.left_trajectory= [{"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},]
 
-        self.left_trajectory = [
-            {"t": 0, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},
-            {"t": 700, "xyz": init_mocap_pose_left[:3], "quat": init_mocap_pose_left[3:], "gripper": 1},
-        ]
-        self.right_trajectory = [
-            {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
-            {"t": 700, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
-        ]
+            # 逐行读取文件
+            for process_Q in Quaternion.intermediates(init_quat_left,target_quat_left, lines_total):
+                line = file.readline()
+                line_number += 1  # 每读取一行，行号加1
+                target_line = line.strip()
+                if target_line.startswith('target'):
+                    target_pos = list(map(float, target_line.split(':')[1].strip().split()))
+                # 如果是前3行，跳过不处理
+                if line_number <= 3:
+                    continue
+                if line_number ==lines_total:  # 如果读取到文件末尾，结束循环
+                    self.left_trajectory.append({"t": 1000, "xyz":target_pos, "quat": target_quat_left.elements, "gripper": 0},)
+                    break
+                # 去除行尾的换行符并分割行
+                numbers = line.strip().split()
+                # 检查是否有数字存在
+                if numbers:
+                    # 获取第一个数字，即列表中的第一个元素
+                    text_x = numbers[0]
+                    text_y = numbers[1]
+                    text_z = numbers[2]
+                    self.left_trajectory.append({"t": line_number*10, "xyz":np.array([float(text_x), float(text_y), float(text_z)]), "quat": process_Q.elements, "gripper": 1},)
+
+        # self.left_trajectory = [
+        #     {"t": 0, "xyz": init_mocap_pose_left[:3] , "quat": init_mocap_pose_left[3:], "gripper": 1},
+        #     {"t": 700, "xyz": [-0.4206847, 0.56161671, 0.40360408], "quat": [1,0,0,0], "gripper": 1},
+        # ]
+                self.right_trajectory = [
+                    {"t": 0, "xyz": init_mocap_pose_right[:3], "quat": init_mocap_pose_right[3:], "gripper": 1},
+                    {"t": 1000, "xyz": init_mocap_pose_right[:3] , "quat": init_mocap_pose_right[3:], "gripper": 1},
+                ]
         # self.left_trajectory =  [
         # 搬方块
         # ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -422,7 +402,7 @@ def test_policy(task_name):
     onscreen_render = True
     inject_noise = False
 
-    for episode_idx in range(20):
+    for episode_idx in range(10):
         # setup the environment
         episode_len = SIM_TASK_CONFIGS[task_name]['episode_len']
         if 'sim_transfer_cube' in task_name:
@@ -437,23 +417,35 @@ def test_policy(task_name):
             raise NotImplementedError
 
         ts = env.reset()
-        print(f"left_init pos:",env._physics.named.data.xpos['handforcesensor3'])
-        print(f"left_init quat:",env._physics.named.data.xquat['handforcesensor3'])
-        print(f"left_mocap pos:",env._physics.named.data.xpos['mocap_left'])
-        print(f"left_mocap quat:",env._physics.named.data.xquat['mocap_left'])
-        print(f"right_init pos:",env._physics.named.data.xpos['handforcesensor4'])
-        print(f"right_init quat:",env._physics.named.data.xquat['handforcesensor4'])
-        print(f"right_mocap pos:",env._physics.named.data.xpos['mocap_right'])
-        print(f"right_mocap quat:",env._physics.named.data.xquat['mocap_right'])
+        # 改变机械臂初始位置时需要以下信息
+        # print(f"left_init pos:",env._physics.named.data.xpos['handforcesensor3'])
+        # print(f"left_init quat:",env._physics.named.data.xquat['handforcesensor3'])
+        # print(f"left_mocap pos:",env._physics.named.data.xpos['mocap_left'])
+        # print(f"left_mocap quat:",env._physics.named.data.xquat['mocap_left'])
+        # print(f"right_init pos:",env._physics.named.data.xpos['handforcesensor4'])
+        # print(f"right_init quat:",env._physics.named.data.xquat['handforcesensor4'])
+        # print(f"right_mocap pos:",env._physics.named.data.xpos['mocap_right'])
+        # print(f"right_mocap quat:",env._physics.named.data.xquat['mocap_right'])
         episode = [ts]
         if onscreen_render:
             # 录视频
             # writer = imageio.get_writer(f'episode_{episode_idx}.mp4', fps=30)
-            ax = plt.subplot()
-            plt_img = ax.imshow(ts.observation['images']['top'])
+            # ax = plt.subplot()
+            # plt_img = ax.imshow(ts.observation['images']['top'])
+
+            # 创建两个子图，分别用于展示 'top' 和 'angle' 相机视角
+            fig, (ax1, ax2) = plt.subplots(1, 2)  # 1行2列的子图布局
+
+            # 显示 'top' 相机图像
+            plt_img_top = ax1.imshow(ts.observation['images']['top'])
+            ax1.set_title('Top Camera')
+
+            # 显示 'angle' 相机图像
+            plt_img_angle = ax2.imshow(ts.observation['images']['angle'])
+            ax2.set_title('Angle Camera')
             plt.ion()
 
-        policy = RMPolicy_fireextinguisher(inject_noise)
+        policy = RMPolicy_simpletrajectory(inject_noise)
         for step in range(episode_len):
             action = policy(ts)
             ts = env.step(action)
@@ -471,10 +463,15 @@ def test_policy(task_name):
 
             episode.append(ts)
             if onscreen_render:
-                image = ts.observation['images']['top']  # 假设这是图像数据
-                # writer.append_data(image)  # 将图像帧写入视频
+                # image = ts.observation['images']['angle']  # 假设这是图像数据
+                # # writer.append_data(image)  # 将图像帧写入视频
+                #
+                # plt_img.set_data(ts.observation['images']['angle'])
+                # 更新 'top' 相机的图像
+                plt_img_top.set_data(ts.observation['images']['top'])
 
-                plt_img.set_data(ts.observation['images']['top'])
+                # 更新 'angle' 相机的图像
+                plt_img_angle.set_data(ts.observation['images']['angle'])
                 plt.pause(0.02)
         plt.close()
         # writer.close()

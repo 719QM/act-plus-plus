@@ -186,7 +186,7 @@ def main(args):
 
         # HDF5
         t0 = time.time()
-        dataset_path = os.path.join(dataset_dir, f'episode_{episode_idx}')
+        dataset_path = os.path.join(dataset_dir, f'episode_{episode_idx+80}')
         with h5py.File(dataset_path + '.hdf5', 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
             root.attrs['sim'] = True
             obs = root.create_group('observations')

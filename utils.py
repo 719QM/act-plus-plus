@@ -332,9 +332,9 @@ def sample_box_pose_RM():
     return np.concatenate([cube_position, cube_quat])
 
 def sample_ball_pose_RM():
-    x_range = [-0.5, -0.3]
-    y_range = [0.38, 0.58]
-    z_range = [0.3, 0.5]
+    x_range = [-0.45, -0.3]
+    y_range = [0.2, 0.4]
+    z_range = [0.35, 0.45]
 
     ranges = np.vstack([x_range, y_range, z_range])
     ball_position = np.random.uniform(ranges[:, 0], ranges[:, 1])

@@ -361,13 +361,13 @@ class RMsimpletrajectoryEETask(base.Task):
         righthand_set_quat = Quaternion([-0.75968791, 0, 0, 0.65028784])
         rightmocap_set_quat = Quaternion([1, 0, 0, 0])
         rightdelt_quat = rightmocap_set_quat / righthand_set_quat
-
-        lefthand_init_quat = Quaternion([-0.53739432, -0.45963982,  0.53696655, -0.46000599])
-        leftmocap_init_quat = leftdelt_quat * lefthand_init_quat
+        # 初始化后修改init，不修改偏移量！！！只有修改模型后偏移量需要重新校准
+        lefthand_init_quat = Quaternion([-0.11732551, -0.16290137,  0.9796316,   0.00444887])
+        leftmocap_init_quat = lefthand_init_quat * leftdelt_quat
         print(f"leftmocap init quat: ", leftmocap_init_quat)
 
         righthand_init_quat = Quaternion([-0.75968791, 0, 0, 0.65028784])
-        rightmocap_init_quat = rightdelt_quat * righthand_init_quat
+        rightmocap_init_quat =righthand_init_quat* rightdelt_quat
         print(f"rightmocap init quat: ", rightmocap_init_quat)
 
         # 位置偏移量
@@ -375,7 +375,7 @@ class RMsimpletrajectoryEETask(base.Task):
         rightdelt_pos = np.array([-0.0401231, -0.0012093, -0.0036001])
 
         # left
-        np.copyto(physics.data.mocap_pos[0], np.array([-0.4206847, 0.56161671, 0.40360408]) + leftdelt_pos)
+        np.copyto(physics.data.mocap_pos[0], np.array([-0.03911368,  0.87658713,  0.40874427]) + leftdelt_pos)
         np.copyto(physics.data.mocap_quat[0], leftmocap_init_quat.elements)
         # right
         np.copyto(physics.data.mocap_pos[1], np.array([-0.41987693, -0.56879072,  0.4036001]) + rightdelt_pos)
@@ -444,6 +444,7 @@ class RMsimpletrajectoryEETask(base.Task):
                     obstcale = np.concatenate([obstacle_pose, obstacle_quat])
                     if len(obstcale) == 7:
                         np.copyto(physics.named.data.qpos['red_box_joint'], obstcale)
+                        print(f"box_pos: ", physics.named.data.qpos['red_box_joint'])
                     else:
                         print("Box position does not contain exactly 3 values.")
 

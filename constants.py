@@ -10,8 +10,8 @@ DATA_DIR = '/home/juyiii/data/aloha/'
 SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
         'dataset_dir': DATA_DIR + '/sim_RM_Astar',
-        'num_episodes': 20,
-        'episode_len': 700,
+        'num_episodes': 100,
+        'episode_len': 1000,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top', 'angle']
 
@@ -84,10 +84,9 @@ DT = 0.02
 FPS = 50
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
-# START_ARM_POSE_RM = [0, -0.227, -0.777, 1.52, 0, -1.63, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
-# START_ARM_POSE_RM = [-1.61564, -0.83953, -0.21204, 0.03107, 0.51382, -1.50792, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
-START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-# START_ARM_POSE_RM = [-1.37, -0.431, -0.283, 3.11, 0.715, -1.7, 0, 0, 0.227, 0.777, 0, 0, 0, 0]
+# START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+START_ARM_POSE_RM = [0, -0.431, -0.613, -0.777, -0.067, -0.565, 0, 0, 0, 0, 0, 0, 0, 0]
+
 
 # SHADOWHAND
 LEFT_ARM_START = np.array([1.5633898, 0.27038634, -1.4091092, -2.009177, 2.0931191, -4.208923])
