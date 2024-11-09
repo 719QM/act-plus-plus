@@ -79,6 +79,7 @@ def main(args):
 
     # fixed parameters
     # 定义模型的架构和超参数，包括学习率、网络结构、层数等
+    # NOTE realman state_dim = 16(7+1+7+1); aloha state_dim = 14(6+1+6+1),action_dim为什么是16？？
     state_dim = 14
     lr_backbone = 1e-5
     backbone = 'resnet18'
