@@ -7,14 +7,29 @@ import numpy as np
 ### Task parameters
 # DATA_DIR = '/home/zfu/interbotix_ws/src/act/data' if os.getlogin() == 'zfu' else '/scr/tonyzhao/datasets'
 DATA_DIR = '/home/juyiii/data/aloha/'
+REALMAN_TASK_CONFIGS = {
+    'rmreal_pick':{
+        'dataset_dir': DATA_DIR + '/rmreal_pick',
+        'num_episodes': 38,
+        'episode_len': 90,
+        'camera_names': ['image_100', 'image_110']
+    },
+
+}
 SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
         'dataset_dir': DATA_DIR + '/sim_RM_Astar',
         'num_episodes': 100,
-        'episode_len': 1000,
+        'episode_len': 2000,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top', 'angle']
-
+    },
+    'rmreal_task': {
+        'dataset_dir': DATA_DIR + '/rmreal',
+        'num_episodes': 100,
+        'episode_len': 1000,
+        # 'camera_names': ['top', 'left_wrist', 'right_wrist']
+        'camera_names': ['top']
     },
     'sim_RM_fire_extinguisher':{
         'dataset_dir': DATA_DIR + '/sim_RM_fire_extinguisher',
@@ -80,8 +95,8 @@ SIM_TASK_CONFIGS = {
 
 
 ### Simulation envs fixed constants
-DT = 0.02
-FPS = 50
+DT = 0.05
+FPS = 20
 JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 START_ARM_POSE = [0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239,  0, -0.96, 1.16, 0, -0.3, 0, 0.02239, -0.02239]
 # START_ARM_POSE_RM = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

@@ -56,6 +56,7 @@ def main(args):
     print('---------------------------------------')
 
     # get task parameters
+    isrmrealrobot = task_name[:7] == 'rmreal_'
     # 如果任务的前四个字符是sim_，is_sim=1
     is_sim = task_name[:4] == 'sim_'
     # print the task name and config
@@ -64,6 +65,9 @@ def main(args):
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS
         task_config = SIM_TASK_CONFIGS[task_name]
+    elif isrmrealrobot:
+        from constants import REALMAN_TASK_CONFIGS
+        task_config = REALMAN_TASK_CONFIGS[task_name]
     else:
         from aloha_scripts.constants import TASK_CONFIGS
         task_config = TASK_CONFIGS[task_name]
@@ -79,8 +83,13 @@ def main(args):
 
     # fixed parameters
     # 定义模型的架构和超参数，包括学习率、网络结构、层数等
-    # NOTE realman state_dim = 16(7+1+7+1); aloha state_dim = 14(6+1+6+1),action_dim为什么是16？？
-    state_dim = 14
+    # NOTE realman state_dim = 16(7+1+7+1); aloha state_dim = 14(6+1+6+1),action_dim为什么是16??好像是因为还有俩base的数据
+    if isrmrealrobot:
+        state_dim = 16
+        action_dim = 18
+    else:
+        state_dim = 14
+        action_dim = 16
     lr_backbone = 1e-5
     backbone = 'resnet18'
     if policy_class == 'ACT':
@@ -104,7 +113,7 @@ def main(args):
                          'vq': args['use_vq'],
                          'vq_class': args['vq_class'],
                          'vq_dim': args['vq_dim'],
-                         'action_dim': 16,
+                         'action_dim': action_dim,
                          'no_encoder': args['no_encoder'],
                          }
     elif policy_class == 'Diffusion':
@@ -121,7 +130,7 @@ def main(args):
                          'vq': False,
                          }
     elif policy_class == 'CNNMLP':
-        policy_config = {'lr': args['lr'], 'lr_backbone': lr_backbone, 'backbone' : backbone, 'num_queries': 1,
+        policy_config = {'lr': args['lr'], 'lr_backbone': lr_backbone, 'backbone': backbone, 'num_queries': 1,
                          'camera_names': camera_names,}
     else:
         raise NotImplementedError
@@ -152,6 +161,7 @@ def main(args):
         'temporal_agg': args['temporal_agg'],
         'camera_names': camera_names,
         'real_robot': not is_sim,
+        'rm_real_robot': isrmrealrobot,
         'load_pretrain': args['load_pretrain'],
         'actuator_config': actuator_config,
     }
@@ -254,6 +264,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     ckpt_dir = config['ckpt_dir']
     state_dim = config['state_dim']
     real_robot = config['real_robot']
+    rm_real_robot = config['rm_real_robot']
     policy_class = config['policy_class']
     onscreen_render = config['onscreen_render']
     policy_config = config['policy_config']
@@ -326,6 +337,10 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         from aloha_scripts.real_env import make_real_env # requires aloha
         env = make_real_env(init_node=True, setup_robots=True, setup_base=True)
         env_max_reward = 0
+    elif rm_real_robot:
+        from realman.realman_env import make_rm_real_env
+        env = make_rm_real_env()
+        env_max_reward = 0
     else:
         from sim_env import make_sim_env
         env = make_sim_env(task_name)
@@ -336,7 +351,8 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     if temporal_agg:
         query_frequency = 1
         num_queries = policy_config['num_queries']
-    if real_robot:
+    #  NOTE 这个地方没有看明白，这个delay是干嘛的？
+    if real_robot or rm_real_robot:
         BASE_DELAY = 13
         query_frequency -= BASE_DELAY
 
@@ -348,7 +364,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
     episode_returns = []
     highest_rewards = []
     for rollout_id in range(num_rollouts):
-        if real_robot:
+        if real_robot or rm_real_robot:
             e()
         rollout_id += 0
         ### set task
@@ -477,6 +493,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 ### post-process actions
                 time4 = time.time()
                 raw_action = raw_action.squeeze(0).cpu().numpy()
+                # 后处理 去归一化
                 action = post_process(raw_action)
                 target_qpos = action[:-2]
                 print(f"qpos_target: ", target_qpos)
@@ -498,7 +515,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
                 ### step the environment
                 time5 = time.time()
-                if real_robot:
+                if real_robot or rm_real_robot:
                     ts = env.step(target_qpos, base_action)
                 else:
                     ts = env.step(target_qpos)
@@ -515,7 +532,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 # time.sleep(max(0, DT - duration - culmulated_delay))
                 if duration >= DT:
                     culmulated_delay += (duration - DT)
-                    # print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
+                    print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
                 # else:
                 #     culmulated_delay = max(0, culmulated_delay - (DT - duration))
 
@@ -557,7 +574,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         print(f"End effector position has been saved in {ckpt_dir}/end_effector_position.txt")
 
 
-    # 所有50个回合结束后，计算成功率与平均回报
+    # 所有回合结束后，计算成功率与平均回报
     success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
     avg_return = np.mean(episode_returns)
     summary_str = f'\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n'
@@ -584,6 +601,7 @@ def forward_pass(data, policy):
     image_data, qpos_data, action_data, is_pad = data
     # 将张量数据从CPU内存移动到GPU内存
     image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
+    # print(action_data.shape)
     return policy(qpos_data, image_data, action_data, is_pad) # TODO remove None
 
 

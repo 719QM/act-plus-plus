@@ -93,22 +93,25 @@ class DETRVAE(nn.Module):
 
     def encode(self, qpos, actions=None, is_pad=None, vq_sample=None):
         bs, _ = qpos.shape
+        # At test time, we set z to be the mean of the prior distribution i.e. zero to deterministically decode.
         if self.encoder is None:
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
             latent_input = self.latent_out_proj(latent_sample)
             probs = binaries = mu = logvar = None
         else:
             # cvae encoder
-            is_training = actions is not None # train or val
+            is_training = actions is not None # train or val 有action时是训练，无action是评估
             ### Obtain latent z from action sequence
             if is_training:
                 # project action sequence to embedding dim, and concat with a CLS token
+                # print(f"action shape: {actions.shape}")
                 action_embed = self.encoder_action_proj(actions) # (bs, seq, hidden_dim)
                 qpos_embed = self.encoder_joint_proj(qpos)  # (bs, hidden_dim)
                 qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
                 cls_embed = self.cls_embed.weight # (1, hidden_dim)
                 cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1) # (bs, 1, hidden_dim)
                 # encoder的输入 将CLS标记、关节位置嵌入和动作嵌入按序列连接起来，形成编码器的输入
+                # print(f"cls_embed shape: {cls_embed.shape}, qpos_embed shape:{qpos_embed.shape}, action_embed shape: {action_embed.shape}")
                 encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1) # (bs, seq+1, hidden_dim)
                 encoder_input = encoder_input.permute(1, 0, 2) # (seq+1, bs, hidden_dim)
                 # do not mask cls token
@@ -119,6 +122,7 @@ class DETRVAE(nn.Module):
                 pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
                 # query model
                 # 基于transformer的表征
+                # print(f"pos_embed shape: {pos_embed.shape}")
                 encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
                 encoder_output = encoder_output[0] # take cls output only
                 # 输出结果
@@ -157,6 +161,7 @@ class DETRVAE(nn.Module):
         env_state: None
         actions: batch, seq, action_dim
         """
+        # print(f"action shape: {actions.shape}")
         latent_input, probs, binaries, mu, logvar = self.encode(qpos, actions, is_pad, vq_sample)
 
         # cvae decoder
@@ -277,7 +282,8 @@ def build_encoder(args):
 
 # ACT算法实现
 def build(args):
-    state_dim = 14 # TODO hardcode
+    # NOTE realman 的 state_dim = 16， aloha 的等于14
+    state_dim = 16 # TODO hardcode
 
     # From state
     # backbone = None # from state for now, no need for conv nets
@@ -291,7 +297,6 @@ def build(args):
         backbone = build_backbone(args)
         backbones.append(backbone)
 
-    # 创建VAE中的解码器或叫生成器
     transformer = build_transformer(args)
 
     if args.no_encoder:

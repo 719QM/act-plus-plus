@@ -59,25 +59,67 @@ class RealmanEnv:
         else:
             print(f"\nSuccessfully connected to the left arm: {self.left_handle.id} and the right arm: {self.right_handle.id}\n")
 
-        self.pipeline = rs.pipeline()
+        # Initialize camera
+        self.camera_serial_110 = 'f1381658'
+        self.camera_serial_100 = 'f0233166'
+        self.pipelines = {}
         self.init_L515()
 
     def init_L515(self):
-        config = rs.config()
-        # Get device product line for setting a supporting resolution
-        pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
-        pipeline_profile = config.resolve(pipeline_wrapper)
-        device = pipeline_profile.get_device()
-        device_product_line = str(device.get_info(rs.camera_info.product_line))
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        self.pipeline.start(config)
+
+        # # Get device product line for setting a supporting resolution
+        # pipeline_wrapper = rs.pipeline_wrapper(pipeline)
+        # pipeline_profile = config.resolve(pipeline_wrapper)
+        context = rs.context()
+        devices = []
+        for device in context.devices:
+            if device.get_info(rs.camera_info.name):
+                devices.append(device.get_info(rs.camera_info.serial_number))
+        print(f"Connected devices: {devices}")
+
+        for serial in devices:
+            pipeline = rs.pipeline()
+            config = rs.config()
+            config.enable_device(serial)
+            if serial == self.camera_serial_100:
+                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            if serial == self.camera_serial_110:
+                config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
+
+            pipeline.start(config)
+
+            self.pipelines[serial] = pipeline
+            # self.pipelines.append(pipeline)
+
+        # device = pipeline_profile.get_device()
+        # device_product_line = str(device.get_info(rs.camera_info.product_line))
+        # config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        # self.pipeline.start(config)
 
     def get_images(self):
-        frames = self.pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        # NOTE 将color_frame转换为numpy array，根据需要进行更改
-        color_image = np.asanyarray(color_frame.get_data())
-        return color_image
+        print(f"enter get_images")
+        image_dict = dict()
+        camera_names = ['image_110', 'image_100']
+
+        for serial, pipeline in self.pipelines.items():
+            print(f"serial: ", serial)
+            frames = pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+            if serial == self.camera_serial_110:
+                color_image = cv2.resize(color_image, (640, 480))
+                image_dict['image_110'] = color_image
+            if serial == self.camera_serial_100:
+                image_dict['image_100'] = color_image
+                print(f"find image_100")
+
+        # frames = self.pipeline.wait_for_frames()
+        # color_frame = frames.get_color_frame()
+        # for cam_name in camera_names:
+        #     # NOTE 将color_frame转换为numpy array，根据需要进行更改
+        #     image_dict[cam_name] = np.asanyarray(color_frame.get_data())
+        # color_image = np.asanyarray(color_frame.get_data())
+        return image_dict
 
     def get_qpos(self):
         """
@@ -127,16 +169,25 @@ class RealmanEnv:
 
     def reset(self, v=20, r=0, connect=0, block=1):
         # 重置机械臂
-        leftarm_init = [0, 0, 0, 0, 0, 0, 0]
-        rightarm_init = [0, 0, 0, 0, 0, 0, 0]
+        leftarm_init = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        rightarm_init = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         lefthand_init = [999, 999, 999, 999, 999, 999]
         righthand_init = [999, 999, 999, 999, 999, 999]
-        rm_movej(self.left_handle, leftarm_init, v, r, connect, block)
-        rm_movej(self.right_handle, rightarm_init, v, r, connect, block)
+
+        array_type = ctypes.c_float * len(leftarm_init)
+        ctypes_array = array_type(*leftarm_init)
+        ctypes_array_right = array_type(*rightarm_init)
+        LP_c_float = ctypes.POINTER(ctypes.c_float)
+        LP_c_float_right = ctypes.POINTER(ctypes.c_float)
+        pointer_to_array = ctypes.cast(ctypes_array, LP_c_float)
+        pointer_to_array_right = ctypes.cast(ctypes_array_right, LP_c_float_right)
+
+        rm_movej(self.left_handle, pointer_to_array, v, r, connect, block)
+        rm_movej(self.right_handle, pointer_to_array_right, v, r, connect, block)
         self.rm_set_hand_angle(lefthand_init, self.left_handle)
         self.rm_set_hand_angle(righthand_init, self.right_handle)
         # 初始的qpos=leftarm_init+lefthand_init+rightarm_init+righthand_init
-        qpos_init = np.concatenate((leftarm_init, 1, rightarm_init, 1))
+        qpos_init = np.concatenate((leftarm_init, [1], rightarm_init, [1]))
         obs = collections.OrderedDict()
         obs['qpos'] =qpos_init
         # NOTE qvel?
@@ -180,11 +231,23 @@ class RealmanEnv:
         state_len = int(len(action) / 2)
         left_action = action[:state_len]
         right_action = action[state_len:]
-        left_movetag = rm_movej(self.left_handle, left_action[:7], v, r, connect, block)
-        right_movetag = rm_movej(self.right_handle, right_action[:7], v, r, connect, block)
-        left_handtag = self.rm_set_hand_angle(left_action[8], self.left_handle)
-        right_handtag = self.rm_set_hand_angle(right_action[8], self.right_handle)
 
+        left_qpos = left_action[:7]
+        right_qpos = right_action[:7]
+
+        array_type = ctypes.c_float * len(left_qpos)
+        ctypes_array = array_type(*left_qpos)
+        ctypes_array_right = array_type(*right_qpos)
+        LP_c_float = ctypes.POINTER(ctypes.c_float)
+        LP_c_float_right = ctypes.POINTER(ctypes.c_float)
+        pointer_to_array = ctypes.cast(ctypes_array, LP_c_float)
+        pointer_to_array_right = ctypes.cast(ctypes_array_right, LP_c_float_right)
+
+        left_movetag = rm_movej(self.left_handle, pointer_to_array, v, r, connect, block)
+        right_movetag = rm_movej(self.right_handle, pointer_to_array_right, v, r, connect, block)
+        left_handtag = self.rm_set_hand_angle([left_action[7]], self.left_handle)
+        right_handtag = self.rm_set_hand_angle([right_action[7]], self.right_handle)
+        print(f"left_arm: ", left_movetag, "right_arm: ", right_movetag, "left_hand: ", left_handtag, "right_hand: ", right_handtag)
         obs = collections.OrderedDict()
         obs['qpos'] = action
         # NOTE qvel?
@@ -204,18 +267,43 @@ def make_rm_real_env():
     return env
 
 def test_realenv():
+    render_cams = ['image_100']  # Camera names
     env = make_rm_real_env()
     ts = env.reset()
     episode = [ts]
-    # env.step(action)
+    from visualize_episodes import load_hdf5
+    qpos_list, _, _, _ = load_hdf5('/home/juyiii/data/aloha/rmreal_pick', 'episode_7')
+    qpos = np.array(qpos_list)
+    num_ts, num_dim = qpos.shape
+    start_time = time.time()
+    last_time = start_time
+    for t in range(num_ts):
+        action = [0, 0, 0, 0, 0, 0, 90, 999, 0, 0, 0, 0, 0, 0, 0, 999]
 
-    for t in range(1000):
-        action = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
+
+        # action = qpos[t, :]
+
         ts = env.step(action)
         episode.append(ts)
-        cv2.imshow('image', ts.observation['images'])
+        image = ts.observation['images']['image_100']
+        cv2.imshow('image_100', image)
 
-    env.pipeline.stop()
+        # images = [ts.observation['images'][cam] for cam in render_cams]
+        # # Combine images horizontally or vertically
+        # combined_image = cv2.hconcat(images)  # Combine horizontally
+        # cv2.imshow('image', combined_image)
+
+        # 设定频率为20Hz (50ms per frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):  # 按下'q'键退出
+            break
+        now_time = time.time()
+        print(f"Time: {now_time - start_time:.2f}, FPS: {1 / (now_time - last_time):.2f}")
+        last_time = now_time
+        time.sleep(0.05)
+
+    cv2.destroyAllWindows()
+    for pipeline in env.pipelines:
+        pipeline.stop()
 
 if __name__ == '__main__':
     test_realenv()

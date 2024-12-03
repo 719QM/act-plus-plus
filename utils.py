@@ -14,6 +14,7 @@ import IPython
 e = IPython.embed
 
 def flatten_list(l):
+    # 将二维嵌套列表展平为一维列表的函数。
     return [item for sublist in l for item in sublist]
 
 class EpisodicDataset(torch.utils.data.Dataset):
@@ -63,9 +64,15 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     action = np.concatenate([root['/action'][()], base_action], axis=-1)
                 else:  
                     action = root['/action'][()]
+                    # [59, 16]
+                    # print(f"action shape3: {action.shape}")
+
                     dummy_base_action = np.zeros([action.shape[0], 2])
                     action = np.concatenate([action, dummy_base_action], axis=-1)
                 original_action_shape = action.shape
+                # print(f"action shape0: {action.shape}")
+                # [59, 18]
+
                 episode_len = original_action_shape[0]
                 # get observation at start_ts only
                 qpos = root['/observations/qpos'][start_ts]
@@ -78,7 +85,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
                     for cam_name in image_dict.keys():
                         decompressed_image = cv2.imdecode(image_dict[cam_name], 1)
                         image_dict[cam_name] = np.array(decompressed_image)
-                
+                # print(f"action shape1: {action.shape}")
+
                 # get all actions after and including start_ts
                 if is_sim:
                     action = action[start_ts:]
@@ -86,7 +94,6 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 else:
                     action = action[max(0, start_ts - 1):] # hack, to make timesteps more aligned
                     action_len = episode_len - max(0, start_ts - 1) # hack, to make timesteps more aligned
-
             # self.is_sim = is_sim
             padded_action = np.zeros((self.max_episode_len, original_action_shape[1]), dtype=np.float32)
             padded_action[:action_len] = action
@@ -142,12 +149,14 @@ class EpisodicDataset(torch.utils.data.Dataset):
         except:
             print(f'Error loading {dataset_path} in __getitem__')
             quit()
-
+        # print(f"action date shape: {action_data.shape}")
         # print(image_data.dtype, qpos_data.dtype, action_data.dtype, is_pad.dtype)
         return image_data, qpos_data, action_data, is_pad
 
 
 def get_norm_stats(dataset_path_list):
+    # 这个函数主要用于加载多个 .hdf5 数据集中的 qpos 和 action 数据，
+    # 计算其均值、标准差等统计信息，以便在后续的训练过程中对数据进行归一化和标准化处理。
     all_qpos_data = []
     all_action_data = []
     all_episode_len = []
@@ -162,6 +171,7 @@ def get_norm_stats(dataset_path_list):
                     base_action = preprocess_base_action(base_action)
                     action = np.concatenate([root['/action'][()], base_action], axis=-1)
                 else:
+                    # NOTE 如果没有 base_action，就添加一个空的 base_action
                     action = root['/action'][()]
                     dummy_base_action = np.zeros([action.shape[0], 2])
                     action = np.concatenate([action, dummy_base_action], axis=-1)
@@ -197,6 +207,8 @@ def get_norm_stats(dataset_path_list):
     return stats, all_episode_len
 
 def find_all_hdf5(dataset_dir, skip_mirrored_data):
+    # 这个函数的作用是遍历指定的目录，找到所有符合条件的 .hdf5 文件（排除掉包含 "features" 的文件，
+    # 以及在 skip_mirrored_data 为 True 时包含 "mirror" 的文件），并返回这些文件的路径列表。
     hdf5_files = []
     for root, dirs, files in os.walk(dataset_dir):
         for filename in fnmatch.filter(files, '*.hdf5'):
@@ -220,8 +232,10 @@ def BatchSampler(batch_size, episode_len_l, sample_weights):
 
 def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_size_val, chunk_size, skip_mirrored_data=False, 
               load_pretrain=False, policy_class=None, stats_dir_l=None, sample_weights=None, train_ratio=0.99):
+    # 0.99指的是99%的数据用于训练，1%的数据用于测试
     if type(dataset_dir_l) == str:
         dataset_dir_l = [dataset_dir_l]
+    # 收集多个目录中的 .hdf5 文件路径，将它们展平成一个列表
     dataset_path_list_list = [find_all_hdf5(dataset_dir, skip_mirrored_data) for dataset_dir in dataset_dir_l]
     num_episodes_0 = len(dataset_path_list_list[0])
     dataset_path_list = flatten_list(dataset_path_list_list)
@@ -229,7 +243,7 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
     num_episodes_l = [len(dataset_path_list) for dataset_path_list in dataset_path_list_list]
     num_episodes_cumsum = np.cumsum(num_episodes_l)
 
-    # obtain train test split on dataset_dir_l[0]
+    # obtain train test split on dataset_dir_l[0] 随机打乱数据集，划分训练集和测试集
     shuffled_episode_ids_0 = np.random.permutation(num_episodes_0)
     train_episode_ids_0 = shuffled_episode_ids_0[:int(train_ratio * num_episodes_0)]
     val_episode_ids_0 = shuffled_episode_ids_0[int(train_ratio * num_episodes_0):]
@@ -261,7 +275,7 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
 
     # print(f'train_episode_len: {train_episode_len}, val_episode_len: {val_episode_len}, train_episode_ids: {train_episode_ids}, val_episode_ids: {val_episode_ids}')
 
-    # construct dataset and dataloader
+    # NOTE construct dataset and dataloader 构建数据集和数据加载器
     train_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, train_episode_ids, train_episode_len, chunk_size, policy_class)
     val_dataset = EpisodicDataset(dataset_path_list, camera_names, norm_stats, val_episode_ids, val_episode_len, chunk_size, policy_class)
     # train_num_workers = (8 if os.getlogin() == 'zfu' else 16) if train_dataset.augment_images else 2
@@ -269,6 +283,7 @@ def load_data(dataset_dir_l, name_filter, camera_names, batch_size_train, batch_
     train_num_workers = 16
     val_num_workers = 8
     print(f'Augment images: {train_dataset.augment_images}, train_num_workers: {train_num_workers}, val_num_workers: {val_num_workers}')
+    # num_workers: 用于数据加载的子进程数。如果为 0，将在主进程中加载数据。子进程数意为同时加载的数据批次数。
     train_dataloader = DataLoader(train_dataset, batch_sampler=batch_sampler_train, pin_memory=True, num_workers=train_num_workers, prefetch_factor=2)
     val_dataloader = DataLoader(val_dataset, batch_sampler=batch_sampler_val, pin_memory=True, num_workers=val_num_workers, prefetch_factor=2)
 
