@@ -1,0 +1,8 @@
+@extensibility(APPENDABLE)
+struct ImageData
+{
+    unsigned long width;
+    unsigned long height;
+    sequence<octet> camera110;
+    sequence<octet> camera100;
+};

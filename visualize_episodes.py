@@ -13,7 +13,7 @@ e = IPython.embed
 
 import pdb
 
-JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate", "wrist_yaw"]
+JOINT_NAMES = ["waist", "shoulder", "elbow", "forearm_roll", "wrist_angle", "wrist_rotate"]
 STATE_NAMES = JOINT_NAMES + ["gripper"]
 
 def load_hdf5(dataset_dir, dataset_name):
