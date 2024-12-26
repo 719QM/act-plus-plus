@@ -57,11 +57,11 @@ def adjust_hdf5_data(input_file, output_file, target_length=90):
     print(f"Adjusted data saved to {output_file}")
 
 
-max_episode = 38
-for i in range(max_episode):
-    input_hdf5 = f"/home/juyiii/data/aloha/rmreal_pick_90/episode_{i}.hdf5"
-    output_hdf5 = f"/home/juyiii/data/aloha/rmreal_pick/episode_{i}.hdf5"
-    adjust_hdf5_data(input_hdf5, output_hdf5, target_length=100)
+# max_episode = 38
+for i in range(90, 124):
+    input_hdf5 = f"/home/juyiii/data/aloha/sim_RM_teleoperation/episode_{i}.hdf5"
+    output_hdf5 = f"/home/juyiii/data/aloha/sim_RM_Astar_teleoperation_adjusted/episode_{i}.hdf5"
+    adjust_hdf5_data(input_hdf5, output_hdf5, target_length=1000)
 # input_hdf5 = "/home/juyiii/data/aloha/test/episode_0.hdf5"
 # output_hdf5 = "/home/juyiii/data/aloha/test/episode_0_length.hdf5"
 # adjust_hdf5_data(input_hdf5, output_hdf5, target_length=90)

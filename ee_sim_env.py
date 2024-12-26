@@ -58,7 +58,7 @@ def make_ee_sim_env(task_name):
         xml_path = os.path.join(XML_DIR, f'models/rm_bimanual_ee.xml')
         physics = mujoco.Physics.from_xml_path(xml_path)
         task = RMsimpletrajectoryEETask(random=False)
-        env = control.Environment(physics, task, time_limit=20, control_timestep=DT,
+        env = control.Environment(physics, task, time_limit=1000, control_timestep=DT,
                                   n_sub_steps=None, flat_observation=False)
     elif 'sim_RM_fire_extinguisher' in task_name:
         xml_path = os.path.join(XML_DIR, f'models/rm_bimanual_ee.xml')
@@ -418,7 +418,7 @@ class RMsimpletrajectoryEETask(base.Task):
         episode_number = increment_function()
         print(f"initialize_episode: ", episode_number)
         # 使用格式化字符串创建文件名
-        filename = f"Astar_data/output_{episode_number}.txt"
+        filename = f"Astar_data/output_19.txt"
         with open(filename, 'r') as file:
             for line in file:
                 # 去除行尾的换行符并按空格分割
@@ -455,8 +455,6 @@ class RMsimpletrajectoryEETask(base.Task):
                     # map(float, ...) 将列表中的每个字符串元素转换成浮点数。
                     # list(...) 将 map 对象转换成列表。
         # print(physics.data.qpos)
-
-
         super().initialize_episode(physics)
 
     @staticmethod

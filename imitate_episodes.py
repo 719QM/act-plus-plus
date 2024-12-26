@@ -35,6 +35,25 @@ def get_auto_index(dataset_dir):
             return i
     raise Exception(f"Error getting auto index, or more than {max_idx} episodes")
 
+
+# 定义一个函数来读取 txt 文件的第 t 行数据
+def read_qpos_from_txt(file_path, t):
+    try:
+        with open(file_path, 'r') as f:
+            lines = f.readlines()
+            # 获取第 t 行并去除两端空白字符
+            line = lines[t].strip()
+            # 将逗号分隔的字符串转换为浮点数数组
+            qpos_values = np.array([float(x) for x in line.split(',')])
+            return qpos_values
+    except IndexError:
+        print(f"文件中没有第 {t+1} 行数据！")
+        return None
+    except Exception as e:
+        print(f"读取文件时出错: {e}")
+        return None
+
+
 def main(args):
     set_seed(1) #设置随机种子以保证结果可重现
     # command line parameters 解析命令行参数
@@ -160,7 +179,7 @@ def main(args):
         'seed': args['seed'],
         'temporal_agg': args['temporal_agg'],
         'camera_names': camera_names,
-        'real_robot': not is_sim,
+        'real_robot': False,
         'rm_real_robot': isrmrealrobot,
         'load_pretrain': args['load_pretrain'],
         'actuator_config': actuator_config,
@@ -171,11 +190,11 @@ def main(args):
     expr_name = ckpt_dir.split('/')[-1]
 
     # 训练模式
-    if not is_eval:
-        wandb.init(project="aloha_test", reinit=True, entity="juyiii719", name=expr_name)
-        wandb.config.update(config)
-    with open(config_path, 'wb') as f:
-        pickle.dump(config, f)
+    # if not is_eval:
+    #     wandb.init(project="aloha_test", reinit=True, entity="juyiii719", name=expr_name)
+    #     wandb.config.update(config)
+    # with open(config_path, 'wb') as f:
+    #     pickle.dump(config, f)
     # 评估模式
     if is_eval:
         ckpt_names = [f'policy_best.ckpt']
@@ -183,7 +202,7 @@ def main(args):
         for ckpt_name in ckpt_names:
             # 使用eval_bc函数进行评估，返回值为成功率和平均回报，将这些值存储在results中
             success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=1)
-            # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
+            # # wandb.log({'success_rate': success_rate, 'avg_return': avg_return})
             results.append([ckpt_name, success_rate, avg_return])
 
         for ckpt_name, success_rate, avg_return in results:
@@ -209,7 +228,7 @@ def main(args):
     ckpt_path = os.path.join(ckpt_dir, f'policy_best.ckpt')
     torch.save(best_state_dict, ckpt_path)
     print(f'Best ckpt, val loss {min_val_loss:.6f} @ step{best_step}')
-    wandb.finish()
+    # wandb.finish()
 
 
 def make_policy(policy_class, policy_config):
@@ -419,6 +438,12 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 else:
                     image_list.append({'main': obs['image']})
                 qpos_numpy = np.array(obs['qpos'])
+
+                txt_file_path = 'teleoperation_data/source_txt/teleoperation_qpos_89.txt'  # 替换为你的 txt 文件路径
+                # 调用函数获取 qpos_numpy
+                qpos_numpy = read_qpos_from_txt(txt_file_path, t)
+                # qpos_numpy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
                 print(f"qpos_pre: ", qpos_numpy)
                 qpos_history_raw[t] = qpos_numpy
                 qpos = pre_process(qpos_numpy)
@@ -662,7 +687,7 @@ def train_bc(train_dataloader, val_dataloader, config):
                     best_ckpt_info = (step, min_val_loss, deepcopy(policy.serialize()))
             for k in list(validation_summary.keys()):
                 validation_summary[f'val_{k}'] = validation_summary.pop(k)            
-            wandb.log(validation_summary, step=step)
+            # wandb.log(validation_summary, step=step)
             print(f'Val loss:   {epoch_val_loss:.5f}')
             summary_string = ''
             for k, v in validation_summary.items():
@@ -676,7 +701,7 @@ def train_bc(train_dataloader, val_dataloader, config):
             ckpt_path = os.path.join(ckpt_dir, ckpt_name)
             torch.save(policy.serialize(), ckpt_path)
             # success, _ = eval_bc(config, ckpt_name, save_episode=True, num_rollouts=10)
-            # wandb.log({'success': success}, step=step)
+            # # wandb.log({'success': success}, step=step)
 
         # training 训练模式
         policy.train()
@@ -687,7 +712,7 @@ def train_bc(train_dataloader, val_dataloader, config):
         loss = forward_dict['loss']
         loss.backward()
         optimizer.step()
-        wandb.log(forward_dict, step=step) # not great, make training 1-2% slower
+        # wandb.log(forward_dict, step=step) # not great, make training 1-2% slower
 
         # 每隔一定周期，保存当前模型的权重
         if step % save_every == 0:

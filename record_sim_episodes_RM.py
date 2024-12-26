@@ -72,6 +72,7 @@ def main(args):
             plt_img = ax.imshow(ts.observation['images'][render_cam_name])
             plt.ion()
         for step in range(episode_len):
+            # print("episode_len: ", episode_len)
             action = policy(ts)
             ts = env.step(action)
             # print(ts.observation['qpos'][6])
@@ -79,6 +80,7 @@ def main(args):
             if onscreen_render:
                 plt_img.set_data(ts.observation['images'][render_cam_name])
                 plt.pause(0.002)
+            # print(step)
         plt.close()
 
         episode_return = np.sum([ts.reward for ts in episode[1:]])
