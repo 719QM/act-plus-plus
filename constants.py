@@ -18,9 +18,9 @@ REALMAN_TASK_CONFIGS = {
 }
 SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
-        'dataset_dir': DATA_DIR + '/sim_RM_Astar',
-        'num_episodes': 100,
-        'episode_len': 2000,
+        'dataset_dir': DATA_DIR + '/sim_RM_Astar_teleoperation_adjusted',
+        'num_episodes': 123,
+        'episode_len': 850,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top', 'angle']
     },

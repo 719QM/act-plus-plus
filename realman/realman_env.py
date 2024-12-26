@@ -7,6 +7,8 @@ from pyquaternion import Quaternion
 import pyrealsense2 as rs
 import cv2
 from Robotic_Arm.rm_robot_interface import *
+from realman.constants import HAND_UNNORMALIZE, HAND_NORMALIZE
+from realman.robotic_arm_package.robotic_arm import *
 
 
 import IPython
@@ -43,24 +45,11 @@ class RealmanEnv:
         """
         left_ip = "192.168.1.18"
         right_ip = "192.168.1.19"
-        port = 8080
-        self.thread_mode = rm_thread_mode_e(mode)
-        self.left_arm = RoboticArm(self.thread_mode)
-        self.left_handle = self.left_arm.rm_create_robot_arm(left_ip, port, level)
-        self.right_arm = RoboticArm(self.thread_mode)
-        self.right_handle = self.right_arm.rm_create_robot_arm(right_ip, port, level)
-
-        # self.robot = RoboticArm(self.thread_mode)
-        # self.handle = self.robot.rm_create_robot_arm(ip, port, level)
-
-        if self.left_handle.id == -1 or self.right_handle.id == -1:
-            print("\nFailed to connect to the robot arm\n")
-            exit(1)
-        else:
-            print(f"\nSuccessfully connected to the left arm: {self.left_handle.id} and the right arm: {self.right_handle.id}\n")
+        self.left_arm = Arm(RM75, left_ip)
+        self.right_arm = Arm(RM75, right_ip)
 
         # Initialize camera
-        self.camera_serial_110 = 'f1381658'
+        self.camera_serial_110 = 'f1420921'
         self.camera_serial_100 = 'f0233166'
         self.pipelines = {}
         self.init_L515()
@@ -84,7 +73,7 @@ class RealmanEnv:
             if serial == self.camera_serial_100:
                 config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
             if serial == self.camera_serial_110:
-                config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
+                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
 
             pipeline.start(config)
 
@@ -138,58 +127,39 @@ class RealmanEnv:
         return qpos
     # NOTE 角速度如何获取？
 
-    @staticmethod
-    def rm_set_hand_angle(hand_angle: list[int], handle) -> int:
-        """
-        设置灵巧手各自由度角度
-        @details 设置灵巧手角度，灵巧手有6个自由度，从1~6分别为小拇指，无名指，中指，食指，大拇指弯曲，大拇指旋转
-        Args:
-            hand_angle (list[int]): 手指角度数组，范围：0~1000. 另外，-1代表该自由度不执行任何操作，保持当前状态
-
-        Returns:
-            int: 函数执行的状态码。
-            - 0: 成功。
-            - 1: 控制器返回false，参数错误或机械臂状态发生错误。
-            - -1: 数据发送失败，通信过程中出现问题。
-            - -2: 数据接收失败，通信过程中出现问题或者控制器长久没有返回。
-            - -3: 返回值解析失败，接收到的数据格式不正确或不完整。
-            - -4: 超时未返回
-        """
-        angle = (c_int * 6)(*hand_angle)
-        tag = rm_set_hand_angle(handle, angle)
-        return tag
-
     # NOTE 多半没法这么用，机械臂读取数据周期很长
     def get_observation(self):
         obs = collections.OrderedDict()
+        _, left_joint = self.left_arm.Get_Joint_Degree()
+        _, right_joint = self.right_arm.Get_Joint_Degree()
+
         obs['qpos'] = self.get_qpos()
         obs['qvel'] = self.get_qvel()
         obs['images'] = self.get_images()
         return obs
 
-    def reset(self, v=20, r=0, connect=0, block=1):
+    def reset(self, v=1, r=0, connect=0, block=1):
         # 重置机械臂
         leftarm_init = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         rightarm_init = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         lefthand_init = [999, 999, 999, 999, 999, 999]
         righthand_init = [999, 999, 999, 999, 999, 999]
 
-        array_type = ctypes.c_float * len(leftarm_init)
-        ctypes_array = array_type(*leftarm_init)
-        ctypes_array_right = array_type(*rightarm_init)
-        LP_c_float = ctypes.POINTER(ctypes.c_float)
-        LP_c_float_right = ctypes.POINTER(ctypes.c_float)
-        pointer_to_array = ctypes.cast(ctypes_array, LP_c_float)
-        pointer_to_array_right = ctypes.cast(ctypes_array_right, LP_c_float_right)
+        self.left_arm.Movej_Cmd(leftarm_init, v, r, connect, block)
+        self.right_arm.Movej_Cmd(rightarm_init, v, r, connect, block)
+        self.left_arm.Set_Hand_Angle(lefthand_init, block)
+        self.right_arm.Set_Hand_Angle(righthand_init, block)
 
-        rm_movej(self.left_handle, pointer_to_array, v, r, connect, block)
-        rm_movej(self.right_handle, pointer_to_array_right, v, r, connect, block)
-        self.rm_set_hand_angle(lefthand_init, self.left_handle)
-        self.rm_set_hand_angle(righthand_init, self.right_handle)
         # 初始的qpos=leftarm_init+lefthand_init+rightarm_init+righthand_init
-        qpos_init = np.concatenate((leftarm_init, [1], rightarm_init, [1]))
+        qpos_init = np.concatenate((leftarm_init, [HAND_NORMALIZE(lefthand_init)],
+                                    rightarm_init, [HAND_NORMALIZE(righthand_init)]))
         obs = collections.OrderedDict()
-        obs['qpos'] =qpos_init
+
+        _, left_qpos = self.left_arm.Get_Joint_Degree()
+        _, right_qpos = self.right_arm.Get_Joint_Degree()
+        qpos_obs = np.concatenate((left_qpos, [HAND_NORMALIZE(lefthand_init)],
+                                   right_qpos, [HAND_NORMALIZE(righthand_init)]))
+        obs['qpos'] = qpos_obs
         # NOTE qvel?
         obs['images'] = self.get_images()
         return dm_env.TimeStep(
@@ -199,7 +169,7 @@ class RealmanEnv:
             observation=obs)
 
     # 输入的action是7+1+7+1的关节，前一半是left，后一半是right
-    def step(self, action, v=20, r=0, connect=0, block=1):
+    def step(self, action, v=1, r=0, connect=0, block=1):
         """
         关节空间运动
 
@@ -235,20 +205,19 @@ class RealmanEnv:
         left_qpos = left_action[:7]
         right_qpos = right_action[:7]
 
-        array_type = ctypes.c_float * len(left_qpos)
-        ctypes_array = array_type(*left_qpos)
-        ctypes_array_right = array_type(*right_qpos)
-        LP_c_float = ctypes.POINTER(ctypes.c_float)
-        LP_c_float_right = ctypes.POINTER(ctypes.c_float)
-        pointer_to_array = ctypes.cast(ctypes_array, LP_c_float)
-        pointer_to_array_right = ctypes.cast(ctypes_array_right, LP_c_float_right)
+        left_movetag = self.left_arm.Movej_Cmd(left_qpos, v, r, connect, block)
+        right_movetag = self.right_arm.Movej_Cmd(right_qpos, v, r, connect, block)
+        left_handtag = self.left_arm.Set_Hand_Angle(HAND_UNNORMALIZE(left_action[7]), block)
+        right_handtag = self.right_arm.Set_Hand_Angle(HAND_UNNORMALIZE(right_action[7]), block)
 
-        left_movetag = rm_movej(self.left_handle, pointer_to_array, v, r, connect, block)
-        right_movetag = rm_movej(self.right_handle, pointer_to_array_right, v, r, connect, block)
-        left_handtag = self.rm_set_hand_angle([left_action[7]], self.left_handle)
-        right_handtag = self.rm_set_hand_angle([right_action[7]], self.right_handle)
-        print(f"left_arm: ", left_movetag, "right_arm: ", right_movetag, "left_hand: ", left_handtag, "right_hand: ", right_handtag)
+        print(f"left_arm: ", left_movetag, "right_arm: ", right_movetag,
+              "left_hand: ", left_handtag, "right_hand: ", right_handtag)
         obs = collections.OrderedDict()
+        _, left_qpos = self.left_arm.Get_Joint_Degree()
+        _, right_qpos = self.right_arm.Get_Joint_Degree()
+        qpos_obs = np.concatenate((left_qpos, [left_action[7]],
+                                   right_qpos, [right_action[7]]))
+        obs['qpos'] = qpos_obs
         obs['qpos'] = action
         # NOTE qvel?
         obs['images'] = self.get_images()
@@ -278,7 +247,7 @@ def test_realenv():
     start_time = time.time()
     last_time = start_time
     for t in range(num_ts):
-        action = [0, 0, 0, 0, 0, 0, 90, 999, 0, 0, 0, 0, 0, 0, 0, 999]
+        action = [0, 0, 0, 0, 0, 0, t, 1, 0, 0, 0, 0, 0, 0, 0, 1]
 
 
         # action = qpos[t, :]

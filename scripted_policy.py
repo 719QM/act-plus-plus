@@ -10,6 +10,9 @@ from pyquaternion import Quaternion
 from utils import increment_function
 from constants import SIM_TASK_CONFIGS
 from ee_sim_env import make_ee_sim_env
+import time
+import os
+import h5py
 
 import IPython
 e = IPython.embed
@@ -223,6 +226,7 @@ class RMPolicy_simpletrajectory(BasePolicy):
         print(f"policy: ", episode_number)
         # 使用格式化字符串创建文件名
         filename = f"Astar_data/output_{episode_number}.txt"
+        # filename = f"Astar_data/output_20.txt"
         with open(filename, 'r') as file:
             # 初始化行号计数器
             line_number = 0
@@ -401,8 +405,9 @@ def test_policy(task_name):
     # example rolling out pick_and_transfer policy
     onscreen_render = True
     inject_noise = False
+    end_effector_pos = []
 
-    for episode_idx in range(10):
+    for episode_idx in range(20):
         # setup the environment
         episode_len = SIM_TASK_CONFIGS[task_name]['episode_len']
         if 'sim_transfer_cube' in task_name:
@@ -481,6 +486,52 @@ def test_policy(task_name):
             print(f"{episode_idx=} Successful, {episode_return=}")
         else:
             print(f"{episode_idx=} Failed")
+
+        data_dict = {
+            '/observations/qpos': [],
+            '/action': [],
+        }
+        camera_names = SIM_TASK_CONFIGS['sim_RM_simpletrajectory']['camera_names']
+        for cam_name in camera_names:
+            data_dict[f'/observations/images/{cam_name}'] = []
+        episode = episode[:-1]
+        max_timesteps = episode_len
+        for t in range(max_timesteps):
+            ts = episode[t]
+            data_dict['/action'].append(ts.observation['qpos'])
+            data_dict['/observations/qpos'].append(ts.observation['qpos'])
+            # data_dict['/action'].append(ts.action)
+            # for cam_name in camera_names:
+            #     data_dict[f'/observations/images/{cam_name}'].append(ts.observation['images'][cam_name])
+            data_dict[f'/observations/images/top'].append(ts.observation['images']['top'])
+            data_dict[f'/observations/images/angle'].append(ts.observation['images']['angle'])
+            end_effector = np.copy(ts.observation['position'])
+            end_effector_pos.append(end_effector)
+            print(f"Accumulated Positions: {end_effector_pos[-1:]}")  # 打印最后一个位置
+
+
+        # HDF5
+        t0 = time.time()
+        dataset_path = os.path.join('/home/juyiii/data/aloha/sim_RM_Astar_teleoperation', f'episode_{episode_idx}')
+        # dataset_path = os.path.join('/home/juyiii/ALOHA/act-plus-plus/EEpos/20', f'episode_{episode_idx}')
+        with h5py.File(dataset_path + '.hdf5', 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
+            root.attrs['sim'] = True
+            obs = root.create_group('observations')
+            image = obs.create_group('images')
+            for cam_name in camera_names:
+                _ = image.create_dataset(cam_name, (max_timesteps, 480, 640, 3), dtype='uint8',
+                                         chunks=(1, 480, 640, 3), )
+            # compression='gzip',compression_opts=2,)
+            # compression=32001, compression_opts=(0, 0, 0, 0, 9, 1, 1), shuffle=False)
+            qpos = obs.create_dataset('qpos', (max_timesteps, 14))
+            action = root.create_dataset('action', (max_timesteps, 14))
+
+            for name, array in data_dict.items():
+                root[name][...] = array
+        print(f'Saving: {time.time() - t0:.1f} secs\n')
+        # np.savetxt('/home/juyiii/ALOHA/act-plus-plus/EEpos/20/Astar_new.txt', np.array(end_effector_pos), fmt='%.6f', delimiter=',', comments='')
+        # print("End effector position has been saved! 'v'")
+
 
 
 if __name__ == '__main__':

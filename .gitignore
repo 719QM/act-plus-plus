@@ -148,3 +148,7 @@ ckpts/
 play.ipynb
 cuda-repo-ubuntu2004-11-8-local_11.8.0-520.61.05-1_amd64.deb
 A_star.py
+/EEpos/
+EEpos/20/episode_20.hdf5
+EEpos/20/episode_adjusted_20.hdf5
+*.hdf5
