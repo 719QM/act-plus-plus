@@ -20,7 +20,7 @@ SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
         'dataset_dir': DATA_DIR + '/sim_RM_Astar_teleoperation_adjusted',
         'num_episodes': 123,
-        'episode_len': 850,
+        'episode_len': 1000,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top', 'angle']
     },

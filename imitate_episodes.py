@@ -439,8 +439,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                     image_list.append({'main': obs['image']})
                 qpos_numpy = np.array(obs['qpos'])
 
-                # txt_file_path = 'teleoperation_data/source_txt/teleoperation_qpos_84.txt'  # 替换为你的 txt 文件路径
-                txt_file_path = 'EEpos/20_3/teleoperation_qpos_3.txt'  # 替换为你的 txt 文件路径
+                txt_file_path = 'teleoperation_data/source_txt/teleoperation_qpos_89.txt'  # 替换为你的 txt 文件路径
                 # 调用函数获取 qpos_numpy
                 qpos_numpy = read_qpos_from_txt(txt_file_path, t)
                 # qpos_numpy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

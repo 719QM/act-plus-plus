@@ -329,7 +329,7 @@ class RMsimpletrajectoryTask(base.Task):
             episode_number = increment_function_jointspace()
             print(f"sim_env: ", episode_number)
             # 使用格式化字符串创建文件名
-            filename = f"Astar_data/output_20.txt"
+            filename = f"Astar_data/output_19.txt"
             with open(filename, 'r') as file:
                 for line in file:
                     # 去除行尾的换行符并按空格分割

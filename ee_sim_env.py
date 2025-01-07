@@ -381,9 +381,6 @@ class RMsimpletrajectoryEETask(base.Task):
         np.copyto(physics.data.mocap_pos[1], np.array([-0.41987693, -0.56879072,  0.4036001]) + rightdelt_pos)
         np.copyto(physics.data.mocap_quat[1], rightmocap_init_quat.elements)
 
-        print(f"left init pos: ", physics.data.mocap_pos[0])
-        print(f"right init pos: ", physics.data.mocap_pos[1])
-
         # reset gripper control
         # close_gripper_control = np.array([
         #     PUPPET_GRIPPER_POSITION_CLOSE,
@@ -421,7 +418,7 @@ class RMsimpletrajectoryEETask(base.Task):
         episode_number = increment_function()
         print(f"initialize_episode: ", episode_number)
         # 使用格式化字符串创建文件名
-        filename = f"Astar_data/output_20.txt"
+        filename = f"Astar_data/output_19.txt"
         with open(filename, 'r') as file:
             for line in file:
                 # 去除行尾的换行符并按空格分割
@@ -488,12 +485,6 @@ class RMsimpletrajectoryEETask(base.Task):
         env_state = physics.data.qpos.copy()[14:]
         return env_state
 
-    @staticmethod
-    def get_pos(physics):
-        left_pos = physics.named.data.xpos['left_7'].copy()
-        # print(f'left_pos: ',left_pos)
-        return left_pos
-
     def get_observation(self, physics):
         # note: it is important to do .copy()
         obs = collections.OrderedDict()
@@ -510,7 +501,6 @@ class RMsimpletrajectoryEETask(base.Task):
 
         # used when replaying joint trajectory
         obs['gripper_ctrl'] = physics.data.ctrl.copy()
-        obs['position'] = self.get_pos(physics)
         return obs
 
     def get_reward(self, physics):

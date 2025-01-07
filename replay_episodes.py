@@ -49,10 +49,10 @@ def main(args):
         end_effector_pos.append(end_effector)
         # print(f"Accumulated Positions: {end_effector_pos[-1:]}")  # 最近5个数据
 
-    np.savetxt('/home/juyiii/ALOHA/act-plus-plus/EEpos/20_3/3.txt', np.array(end_effector_pos), fmt='%.6f', delimiter=',', comments='')
+    # end_effector = [ts.observation['position'] for ts in episode_replay]
+    np.savetxt('/home/juyiii/ALOHA/act-plus-plus/EEpos/teleoperation.txt', np.array(end_effector_pos), fmt='%.6f', delimiter=',', comments='')
     # print(f"Accumulated Positions: {end_effector_pos[-5:]}")  # 最近5个数据
     print("End effector position has been saved! 'v'")
-
     # # saving
     # image_dict = defaultdict(lambda: [])
     # while episode_replay:
