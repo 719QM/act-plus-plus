@@ -4,7 +4,7 @@ from dm_control.utils import inverse_kinematics as ik
 from dm_control import mujoco
 import glfw
 from dm_control.rl import control
-from ee_sim_env import RMsimpletrajectoryEETask
+from ee_sim_env import RMsimpletrajectoryEETask, RMpaperEETask
 from constants import DT
 from scripted_policy import RMPolicy_simpletrajectory
 from pyquaternion import Quaternion
@@ -12,6 +12,11 @@ import time
 import os
 import h5py
 import argparse
+import pickle
+from einops import rearrange
+import torch
+from torchvision import transforms
+
 
 from constants import SIM_TASK_CONFIGS
 camera_names = SIM_TASK_CONFIGS['sim_RM_simpletrajectory']['camera_names']
@@ -20,14 +25,14 @@ camera_angle = []
 
 
 
-xml_path = 'assets/models/rm_bimanual_ee.xml'
+xml_path = 'assets/models/rm_bimanual_both.xml'
 # MuJoCo data structures
 model = mujoco.MjModel.from_xml_path(xml_path)  # MuJoCo model
 data = mujoco.MjData(model)                     # MuJoCo data
 cam = mujoco.MjvCamera()                        # Abstract camera
 opt = mujoco.MjvOption()                        # visualization options
 physics = mujoco.Physics.from_xml_path(xml_path)
-task = RMsimpletrajectoryEETask(random=False)  # 这个task是之前的task，改掉
+task = RMpaperEETask(random=False)  # 这个task是之前的task，改掉
 env = control.Environment(physics, task, time_limit=2000, control_timestep=DT,
                                   n_sub_steps=None, flat_observation=False)
 ts = env.reset()
@@ -47,6 +52,16 @@ last_mouse_pos = None
 policy = None
 teleoperation_qpos = []
 num_episode = None
+image_list = []
+qpos_history_raw = []
+timestep = 0
+target_qpos = []
+ispolicy = False
+all_actions = []
+pre_action = []
+target_action = []
+query_timestep = 0
+
 
 def ik_test():
     # 目标参数
@@ -124,6 +139,29 @@ glfw.set_scroll_callback(window._context.window, scroll_callback)
 glfw.set_mouse_button_callback(window._context.window, mouse_button_callback)
 glfw.set_cursor_pos_callback(window._context.window, cursor_pos_callback)
 
+
+def get_image(ts, camera_names, rand_crop_resize=False):
+    curr_images = []  # 存储从每个摄像头获取的图像
+    for cam_name in camera_names:
+        curr_image = rearrange(ts.observation['images'][cam_name], 'h w c -> c h w')
+        curr_images.append(curr_image)
+    curr_image = np.stack(curr_images, axis=0)  # 将图像列表堆叠成数组
+    curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(
+        0)  # 从 numpy 转为 torch，并归一化到0～1之间， 转移到GPU上， 添加一个新的维度
+
+    if rand_crop_resize:
+        print('rand crop resize is used!')
+        original_size = curr_image.shape[-2:]
+        ratio = 0.95
+        curr_image = curr_image[..., int(original_size[0] * (1 - ratio) / 2): int(original_size[0] * (1 + ratio) / 2),
+                     int(original_size[1] * (1 - ratio) / 2): int(original_size[1] * (1 + ratio) / 2)]
+        curr_image = curr_image.squeeze(0)
+        resize_transform = transforms.Resize(original_size, antialias=True)
+        curr_image = resize_transform(curr_image)
+        curr_image = curr_image.unsqueeze(0)
+
+    return curr_image
+
 class Teleoperation_Policy:
     def __init__(self, env, window, move_speed=0.001, rotate_speed=1):
         self.env = env
@@ -137,7 +175,9 @@ class Teleoperation_Policy:
         self.left_gripper = 1
         self.right_gripper = 1
         self.last_key_time = {}  # 记录每个按键的最后一次按下时间
-        self.debounce_interval = 0.05  # 去抖动时间间隔，单位：秒
+        self.debounce_interval = 0.1  # 去抖动时间间隔，单位：秒
+        self.MYBpolicy = None
+        self.stats = None
 
         # print(f"initial_quat: ", self.mocap_left_quat)
 
@@ -188,7 +228,88 @@ class Teleoperation_Policy:
         elif direction == "0":
             self.left_gripper = 0
 
+    def load_policy(self):
+        from imitate_episodes_teleoperation import make_policy
+        policy_config = {'lr': 1e-5,
+                         'num_queries': 100,
+                         'kl_weight': 10,
+                         'hidden_dim': 512,
+                         'dim_feedforward': 3200,
+                         'lr_backbone': 1e-5,
+                         'backbone': 'resnet18',
+                         'enc_layers': 4,
+                         'dec_layers': 7,
+                         'nheads': 8,
+                         'camera_names': camera_names,
+                         'vq': False,
+                         'vq_class': None,
+                         'vq_dim': None,
+                         'action_dim': 16,
+                         'no_encoder': False,
+                         'ckpt_dir': "ckpt/sim_RM_Astar_teleoperation",
+                         'policy_class': "ACT",
+                         'seed': 0,
+                         'num_steps': 20000,
+                         }
+        # MYBpolicy = make_policy("ACT", policy_config)
+        from policy import ACTPolicy
+        self.MYBpolicy = ACTPolicy(policy_config)
+        ckpt_dir = "ckpt/sim_RM_Astar_teleoperation"
+        ckpt_name = "policy_best.ckpt"
+        ckpt_path = os.path.join(ckpt_dir, ckpt_name)
+        loading_status = self.MYBpolicy.deserialize(torch.load(ckpt_path))
+        print(loading_status)
+        self.MYBpolicy.cuda()
+        self.MYBpolicy.eval()
+        return self.MYBpolicy
+
+    def query_policy(self, tab):
+        global target_qpos, query_timestep, all_actions, ts
+        if query_timestep == 0:
+            ckpt_dir = "ckpt/sim_RM_Astar_teleoperation"
+            stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
+            print(os.path.getsize(stats_path))  # 检查文件大小，如果返回 0 表示文件为空
+            with open(stats_path, 'rb') as f:
+                self.stats = pickle.load(f)
+            self.MYBpolicy = self.load_policy()
+
+        with torch.inference_mode():
+
+            # print("here")
+            query_frequency = 100
+            pre_process = lambda s_qpos: (s_qpos - self.stats['qpos_mean']) / self.stats['qpos_std']
+
+            obs = ts.observation
+            qpos_numpy = np.array(obs['qpos'])
+            # print(qpos_numpy)
+            pre_action.append(qpos_numpy)
+
+            curr_image = get_image(ts, camera_names, rand_crop_resize=False)
+
+            qpos = pre_process(qpos_numpy)
+            qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+
+            if query_timestep % query_frequency == 0:
+
+                if query_timestep == 0:
+                    # warm up
+                    for _ in range(1):
+                        self.MYBpolicy(qpos, curr_image)
+                    print('network warm up done')
+                all_actions = self.MYBpolicy(qpos, curr_image)
+            # print(f"all action(10)", all_actions[:10])
+            raw_action = all_actions[:, query_timestep % query_frequency]
+            raw_action = raw_action.squeeze(0).cpu().numpy()
+            # 后处理 去归一化
+            post_process = lambda a: a * self.stats['action_std'] + self.stats['action_mean']
+            action = post_process(raw_action)
+            target_qpos = action[:-2]
+            target_action.append(target_qpos)
+            # print(f"qpos_target: ", target_qpos)
+            query_timestep = query_timestep + 1
+
     def handle_keyboard_input(self, window):
+        global timestep, ispolicy, ts, query_timestep
         glfw_window = window._context.window  # 获取真实的 GLFW 窗口实例
         current_time = time.time()  # 获取当前时间戳
 
@@ -210,6 +331,9 @@ class Teleoperation_Policy:
 
             glfw.KEY_1: ('1', self.update_gripper),
             glfw.KEY_0: ('0', self.update_gripper),
+
+            glfw.KEY_TAB: ('TAB', self.query_policy),
+
         }
         # 遍历所有按键
         for key, (action, func) in key_actions.items():
@@ -219,12 +343,71 @@ class Teleoperation_Policy:
                 if current_time - last_time > self.debounce_interval:
                     func(action)  # 执行动作
                     print(f"press: {action} \n")
+                    if action == 'TAB':
+                        ispolicy = True
+                        # 获取所有 weld 约束的数量
+                        # num_welds = env._physics.model.eq_type.size
+                        # print(num_welds)
+                        # 关闭 weld 约束（例如，移除 mocap 绑定）
+                        env._physics.model.eq_active[:] = 0  # 禁用所有 weld 约束
+
+                    else:
+                        if ispolicy:
+                            query_timestep = 0
+                            print("修改mocap的位姿")
+                            # 获取当前位置机械臂末端的位姿并得到对应的mocap的位置
+                            # 姿态偏移量
+                            lefthand_set_quat = Quaternion([-0.53739432, -0.45963982, 0.53696655, -0.46000599])
+                            leftmocap_set_quat = Quaternion([1, 0, 0, 0])
+                            leftdelt_quat = leftmocap_set_quat / lefthand_set_quat
+                            righthand_set_quat = Quaternion([-0.75968791, 0, 0, 0.65028784])
+                            rightmocap_set_quat = Quaternion([1, 0, 0, 0])
+                            rightdelt_quat = rightmocap_set_quat / righthand_set_quat
+                            # 位置偏移量
+                            leftdelt_pos = np.array([-0.0393153, 0.00838329, -0.00360406])
+                            rightdelt_pos = np.array([-0.0401231, -0.0012093, -0.0036001])
+
+                            # 获取当前机械臂末端的位姿
+                            lefthand_xpos = env._physics.named.data.xpos['handforcesensor3']
+                            lefthand_quat = Quaternion(env._physics.named.data.xquat['handforcesensor3'])
+                            righthand_xpos = env._physics.named.data.xpos['handforcesensor4']
+                            righthand_quat = Quaternion(env._physics.named.data.xquat['handforcesensor4'])
+
+                            # 更新mocap的位姿
+                            leftmocap_quat = lefthand_quat * leftdelt_quat
+                            leftmocap_xpos = lefthand_xpos + leftdelt_pos
+                            rightmocap_quat = righthand_quat * rightdelt_quat
+                            rightmocap_xpos = righthand_xpos + rightdelt_pos
+
+                            self.mocap_left_xpos = leftmocap_xpos
+                            self.mocap_left_quat = leftmocap_quat
+                            self.mocap_right_xpos = rightmocap_xpos
+                            self.mocap_right_quat = rightmocap_quat
+
+                        ispolicy = False
+                        env._physics.model.eq_active[:] = 1  # 开启所有 weld 约束
+
                     # ik_test()
                     teleoperation_qpos.append(self.get_qpos())
                     camera_top.append(physics.render(height=480, width=640, camera_id='top'))
                     camera_angle.append(physics.render(height=480, width=640, camera_id='angle'))
 
                     self.last_key_time[key] = current_time  # 更新按键的最后按下时间
+
+                    obs = ts.observation
+                    if 'images' in obs:
+                        image_list.append(obs['images'])
+                    else:
+                        image_list.append({'main': obs['image']})
+                    qpos_numpy = np.array(obs['qpos'])
+                    # 将当前时间步的 qpos 添加到列表中
+                    qpos_history_raw.append(qpos_numpy)
+
+                    # qpos_history_raw[timestep] = qpos_numpy
+
+                    timestep = timestep + 1
+                    print(timestep)
+
                     break  # 防止多个按键同时触发
 
         # # 如果没有按下任何按键，更新到初始状态
@@ -322,12 +505,18 @@ class Teleoperation_Policy:
         # self.handle_keyboard_gripper_input(window)
         self.handle_keyboard_input(window)
         # left_quat = env._physics.named.data.xquat['mocap_left']
-        action_left = np.concatenate([self.mocap_left_xpos, self.mocap_left_quat.elements, [self.left_gripper]])
-        action_right = np.concatenate([self.mocap_right_xpos, self.mocap_right_quat.elements, [self.right_gripper]])
+
+        # 如果是policy，那么action应该是一个长度为1+14的向量；如果是遥操作，那么action应该是长度为1+16的向量
+        if ispolicy:
+            action = np.concatenate([np.array([1]), target_qpos])
+        else:
+            action_left = np.concatenate([self.mocap_left_xpos, self.mocap_left_quat.elements, [self.left_gripper]])
+            action_right = np.concatenate([self.mocap_right_xpos, self.mocap_right_quat.elements, [self.right_gripper]])
+            action = np.concatenate([np.array([0]), action_left, action_right])
 
         # qpos = self.get_qpos()
         # print(qpos)
-        return np.concatenate([action_left, action_right])
+        return action
 
     # mocap_left_xpos = env._physics.named.data.xpos['mocap_left']
     # print(f"mocap_left_xpos: ", mocap_left_xpos)
@@ -343,16 +532,28 @@ def save_qpos_to_txt(file_path):
 
 # 定义渲染函数
 def render_func():
-    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode
+    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep
 
     # 只在首次调用时初始化 policy
     if policy is None:
         policy = Teleoperation_Policy(env, window)
 
     action = policy(window)
+    # print(action)
     ts = env.step(action)
 
     episode.append(ts)
+    #
+    # obs = ts.observation
+    # if 'images' in obs:
+    #     image_list.append(obs['images'])
+    # else:
+    #     image_list.append({'main': obs['image']})
+    # qpos_numpy = np.array(obs['qpos'])
+    #
+    # qpos_history_raw[timestep] = qpos_numpy
+    #
+    # timestep = timestep + 1
 
     # 相机位置信息 (根据拖拽和滚轮调整相机位置)
     physics.named.model.cam_pos['left_pillar'][0] = camera_distance * np.cos(np.radians(camera_yaw)) * np.cos(
@@ -369,46 +570,49 @@ def render_func():
     glfw_window = window._context.window  # 获取 GLFW 窗口实例
     if glfw.get_key(glfw_window, glfw.KEY_SPACE) == glfw.PRESS:
         print("空格键按下，退出遥控模式...")
-        # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")
-        save_qpos_to_txt(f"EEpos/20_3/teleoperation_qpos_{num_episode}.txt")
+        np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
+        np.savetxt('target_action.txt', target_action, fmt='%f')
 
-        data_dict = {
-            '/observations/qpos': [],
-            '/action': [],
-        }
-
-        for cam_name in camera_names:
-            data_dict[f'/observations/images/{cam_name}'] = []
-        episode = episode[:-1]
-        max_timesteps = len(teleoperation_qpos)
-        for t in range(max_timesteps):
-            ts = episode[t]
-            data_dict['/action'].append(teleoperation_qpos[t])
-            data_dict['/observations/qpos'].append(teleoperation_qpos[t])
-            # data_dict['/action'].append(ts.action)
-            # for cam_name in camera_names:
-            #     data_dict[f'/observations/images/{cam_name}'].append(ts.observation['images'][cam_name])
-            data_dict[f'/observations/images/top'].append(camera_top[t])
-            data_dict[f'/observations/images/angle'].append(camera_angle[t])
-        # HDF5
-        t0 = time.time()
-        # dataset_path = os.path.join('/home/juyiii/data/aloha/sim_RM_teleoperation', f'episode_18_test')
-        dataset_path = os.path.join('/home/juyiii/ALOHA/act-plus-plus/EEpos/20_3', f'episode_{num_episode}')
-        with h5py.File(dataset_path + '.hdf5', 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
-            root.attrs['sim'] = True
-            obs = root.create_group('observations')
-            image = obs.create_group('images')
-            for cam_name in camera_names:
-                _ = image.create_dataset(cam_name, (max_timesteps, 480, 640, 3), dtype='uint8',
-                                         chunks=(1, 480, 640, 3), )
-            # compression='gzip',compression_opts=2,)
-            # compression=32001, compression_opts=(0, 0, 0, 0, 9, 1, 1), shuffle=False)
-            qpos = obs.create_dataset('qpos', (max_timesteps, 14))
-            action = root.create_dataset('action', (max_timesteps, 14))
-
-            for name, array in data_dict.items():
-                root[name][...] = array
-        print(f'Saving: {time.time() - t0:.1f} secs\n')
+        # # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")
+        # save_qpos_to_txt(f"EEpos/20_3/teleoperation_qpos_{num_episode}.txt")
+        #
+        # data_dict = {
+        #     '/observations/qpos': [],
+        #     '/action': [],
+        # }
+        #
+        # for cam_name in camera_names:
+        #     data_dict[f'/observations/images/{cam_name}'] = []
+        # episode = episode[:-1]
+        # max_timesteps = len(teleoperation_qpos)
+        # for t in range(max_timesteps):
+        #     ts = episode[t]
+        #     data_dict['/action'].append(teleoperation_qpos[t])
+        #     data_dict['/observations/qpos'].append(teleoperation_qpos[t])
+        #     # data_dict['/action'].append(ts.action)
+        #     # for cam_name in camera_names:
+        #     #     data_dict[f'/observations/images/{cam_name}'].append(ts.observation['images'][cam_name])
+        #     data_dict[f'/observations/images/top'].append(camera_top[t])
+        #     data_dict[f'/observations/images/angle'].append(camera_angle[t])
+        # # HDF5
+        # t0 = time.time()
+        # # dataset_path = os.path.join('/home/juyiii/data/aloha/sim_RM_teleoperation', f'episode_18_test')
+        # dataset_path = os.path.join('/home/juyiii/ALOHA/act-plus-plus/EEpos/20_3', f'episode_{num_episode}')
+        # with h5py.File(dataset_path + '.hdf5', 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
+        #     root.attrs['sim'] = True
+        #     obs = root.create_group('observations')
+        #     image = obs.create_group('images')
+        #     for cam_name in camera_names:
+        #         _ = image.create_dataset(cam_name, (max_timesteps, 480, 640, 3), dtype='uint8',
+        #                                  chunks=(1, 480, 640, 3), )
+        #     # compression='gzip',compression_opts=2,)
+        #     # compression=32001, compression_opts=(0, 0, 0, 0, 9, 1, 1), shuffle=False)
+        #     qpos = obs.create_dataset('qpos', (max_timesteps, 14))
+        #     action = root.create_dataset('action', (max_timesteps, 14))
+        #
+        #     for name, array in data_dict.items():
+        #         root[name][...] = array
+        # print(f'Saving: {time.time() - t0:.1f} secs\n')
 
         window.close()  # 关闭窗口，结束事件循环
         return
@@ -427,6 +631,39 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--num_episodes', action='store', type=int, help='num_episodes', required=False)
+
+    parser.add_argument('--eval', action='store_true')
+    parser.add_argument('--onscreen_render', action='store_true')
+    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=True)
+    parser.add_argument('--policy_class', action='store', type=str, help='policy_class, capitalize', required=True)
+    parser.add_argument('--task_name', action='store', type=str, help='task_name', required=True)
+    parser.add_argument('--batch_size', action='store', type=int, help='batch_size', required=True)
+    parser.add_argument('--seed', action='store', type=int, help='seed', required=True)
+    parser.add_argument('--num_steps', action='store', type=int, help='num_steps', required=True)
+    parser.add_argument('--lr', action='store', type=float, help='lr', required=True)
+    parser.add_argument('--load_pretrain', action='store_true', default=False)
+    parser.add_argument('--eval_every', action='store', type=int, default=500, help='eval_every', required=False)
+    parser.add_argument('--validate_every', action='store', type=int, default=500, help='validate_every', required=False)
+    parser.add_argument('--save_every', action='store', type=int, default=500, help='save_every', required=False)
+    parser.add_argument('--resume_ckpt_path', action='store', type=str, help='resume_ckpt_path', required=False)
+    parser.add_argument('--skip_mirrored_data', action='store_true')
+    parser.add_argument('--actuator_network_dir', action='store', type=str, help='actuator_network_dir', required=False)
+    parser.add_argument('--history_len', action='store', type=int)
+    parser.add_argument('--future_len', action='store', type=int)
+    parser.add_argument('--prediction_len', action='store', type=int)
+
+    # for ACT
+    parser.add_argument('--kl_weight', action='store', type=int, help='KL Weight', required=False)
+    parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
+    parser.add_argument('--hidden_dim', action='store', type=int, help='hidden_dim', required=False)
+    parser.add_argument('--dim_feedforward', action='store', type=int, help='dim_feedforward', required=False)
+    parser.add_argument('--temporal_agg', action='store_true')
+    parser.add_argument('--use_vq', action='store_true')
+    parser.add_argument('--vq_class', action='store', type=int, help='vq_class')
+    parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim')
+    parser.add_argument('--no_encoder', action='store_true')
+
+
     main(vars(parser.parse_args()))
 
 

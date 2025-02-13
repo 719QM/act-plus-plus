@@ -79,6 +79,8 @@ def get_args_parser():
     parser.add_argument('--history_len', action='store', type=int)
     parser.add_argument('--future_len', action='store', type=int)
     parser.add_argument('--prediction_len', action='store', type=int)
+
+    parser.add_argument('--num_episodes', action='store', type=int, help='num_episodes', required=False)
     
     return parser
 

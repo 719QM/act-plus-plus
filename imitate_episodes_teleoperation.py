@@ -362,8 +362,10 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
         env_max_reward = 0
     else:
         from sim_env import make_sim_env
+        from ee_sim_env import make_ee_sim_env
         env = make_sim_env(task_name)
         env_max_reward = env.task.max_reward
+        env_ee = make_ee_sim_env(task_name)
 
     # 设置查询频率和时间聚合参数
     query_frequency = policy_config['num_queries']
@@ -395,6 +397,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
             BOX_POSE[0] = sample_box_pose_RM()
 
         ts = env.reset()  # 重置环境
+        ts_ee = env_ee.reset()
 
         ### onscreen render
         if onscreen_render:
@@ -439,12 +442,12 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                     image_list.append({'main': obs['image']})
                 qpos_numpy = np.array(obs['qpos'])
 
-                # txt_file_path = 'teleoperation_data/source_txt/teleoperation_qpos_89.txt'  # 替换为你的 txt 文件路径
-                # # 调用函数获取 qpos_numpy
-                # qpos_numpy = read_qpos_from_txt(txt_file_path, t)
+                txt_file_path = 'teleoperation_data/source_txt/teleoperation_qpos_89.txt'  # 替换为你的 txt 文件路径
+                # 调用函数获取 qpos_numpy
+                qpos_numpy = read_qpos_from_txt(txt_file_path, t)
                 # qpos_numpy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-                # print(f"qpos_pre: ", qpos_numpy)
+                print(f"qpos_pre: ", qpos_numpy)
                 qpos_history_raw[t] = qpos_numpy
                 qpos = pre_process(qpos_numpy)
                 qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
@@ -479,8 +482,6 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                         else:
                             # e()
                             all_actions = policy(qpos, curr_image)
-                            print("query policy")
-
                         # if use_actuator_net:
                         #     collect_base_action(all_actions, norm_episode_all_base_actions)
                         if real_robot:
@@ -500,19 +501,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                         # if t % query_frequency == query_frequency - 1:
                         #     # zero out base actions to avoid overshooting
                         #     raw_action[0, -2:] = 0
-                elif config['policy_class'] == "Diffusion":
-                    if t % query_frequency == 0:
-                        all_actions = policy(qpos, curr_image)
-                        # if use_actuator_net:
-                        #     collect_base_action(all_actions, norm_episode_all_base_actions)
-                        if real_robot:
-                            all_actions = torch.cat([all_actions[:, :-BASE_DELAY, :-2], all_actions[:, BASE_DELAY:, -2:]], dim=2)
-                    raw_action = all_actions[:, t % query_frequency]
-                elif config['policy_class'] == "CNNMLP":
-                    raw_action = policy(qpos, curr_image)
-                    all_actions = raw_action.unsqueeze(0)
-                    # if use_actuator_net:
-                    #     collect_base_action(all_actions, norm_episode_all_base_actions)
+
                 else:
                     raise NotImplementedError
                 # print('query policy: ', time.time() - time3)
@@ -523,7 +512,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 # 后处理 去归一化
                 action = post_process(raw_action)
                 target_qpos = action[:-2]
-                # print(f"qpos_target: ", target_qpos)
+                print(f"qpos_target: ", target_qpos)
 
                 # if use_actuator_net:
                 #     assert(not temporal_agg)
@@ -559,29 +548,12 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                 # time.sleep(max(0, DT - duration - culmulated_delay))
                 if duration >= DT:
                     culmulated_delay += (duration - DT)
-                    # print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
+                    print(f'Warning: step duration: {duration:.3f} s at step {t} longer than DT: {DT} s, culmulated delay: {culmulated_delay:.3f} s')
                 # else:
                 #     culmulated_delay = max(0, culmulated_delay - (DT - duration))
 
             print(f'Avg fps {max_timesteps / (time.time() - time0)}')
             plt.close()
-        if real_robot:
-            move_grippers([env.puppet_bot_left, env.puppet_bot_right], [PUPPET_GRIPPER_JOINT_OPEN] * 2, move_time=0.5)  # open
-            # save qpos_history_raw
-            log_id = get_auto_index(ckpt_dir)
-            np.save(os.path.join(ckpt_dir, f'qpos_{log_id}.npy'), qpos_history_raw)
-            plt.figure(figsize=(10, 20))
-            # plot qpos_history_raw for each qpos dim using subplots
-            for i in range(state_dim):
-                plt.subplot(state_dim, 1, i+1)
-                plt.plot(qpos_history_raw[:, i])
-                # remove x axis
-                if i != state_dim - 1:
-                    plt.xticks([])
-            plt.tight_layout()
-            plt.savefig(os.path.join(ckpt_dir, f'qpos_{log_id}.png'))
-            plt.close()
-
 
         # 计算回报和奖励
         rewards = np.array(rewards)
@@ -612,13 +584,13 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
     print(summary_str)
 
-    # save success rate to txt
-    result_file_name = 'result_' + ckpt_name.split('.')[0] + '.txt'
-    with open(os.path.join(ckpt_dir, result_file_name), 'w') as f:
-        f.write(summary_str)
-        f.write(repr(episode_returns))
-        f.write('\n\n')
-        f.write(repr(highest_rewards))
+    # # save success rate to txt
+    # result_file_name = 'result_' + ckpt_name.split('.')[0] + '.txt'
+    # with open(os.path.join(ckpt_dir, result_file_name), 'w') as f:
+    #     f.write(summary_str)
+    #     f.write(repr(episode_returns))
+    #     f.write('\n\n')
+    #     f.write(repr(highest_rewards))
 
     return success_rate, avg_return
 

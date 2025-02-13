@@ -74,7 +74,6 @@
 <!--&lt;!&ndash;            <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>&ndash;&gt;-->
 <!--&lt;!&ndash;            <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>&ndash;&gt;-->
 <!--&lt;!&ndash;            <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>&ndash;&gt;-->
-
     </actuator>
 
     <contact>

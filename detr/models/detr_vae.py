@@ -56,6 +56,7 @@ class DETRVAE(nn.Module):
         self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim
         self.state_dim, self.action_dim = state_dim, action_dim
         hidden_dim = transformer.d_model
+        # print(hidden_dim, action_dim)
         self.action_head = nn.Linear(hidden_dim, action_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
