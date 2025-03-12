@@ -27,7 +27,7 @@
         <body name="box" pos="-0.4 0.8 0.25">
             <joint name="red_box_joint" type="free" frictionloss="0.01" />
             <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
-            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.2 0.1 0.25" type="box" name="red_box" rgba="1 0 0 1" />
+            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.1 0.1 0.25" type="box" name="red_box" rgba="1 0 0 1" />
         </body>
 
         <body name="ball" pos = "-0.46 0.58 0.4">
@@ -124,6 +124,7 @@
     <contact>
       <exclude body1="base_link" body2="left_1"/>
       <exclude body1="base_link" body2="right_1"/>
+<!--      <exclude body1="box" body2="floor"/>-->
    </contact>
 
 <!--    <keyframe>-->

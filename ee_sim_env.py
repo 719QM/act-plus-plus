@@ -13,7 +13,7 @@ from constants import PUPPET_GRIPPER_VELOCITY_NORMALIZE_FN
 from constants import RM_GRIPPER_UNNORMALIZE, RM_GRIPPER_NORMALIZE, RM_GRIPPER_VELOCITY_NORMALIZE
 from constants import SHADOW_HAND_UNNORMALIZE, SHADOW_HAND_NORMALIZE, SHADOW_HAND_VELOCITY_NORMALIZE
 
-from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM, increment_function, sample_fireextinguisher_pose
+from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM, increment_function, sample_fireextinguisher_pose, sample_ball_pose_RM
 from dm_control import mujoco
 from dm_control.rl import control
 from dm_control.suite import base
@@ -55,7 +55,7 @@ def make_ee_sim_env(task_name):
         env = control.Environment(physics, task, time_limit=20, control_timestep=DT,
                                   n_sub_steps=None, flat_observation=False)
     elif 'sim_RM_simpletrajectory' in task_name:
-        xml_path = os.path.join(XML_DIR, f'models/rm_bimanual_ee.xml')
+        xml_path = os.path.join(XML_DIR, f'models/rm_bimanual_both.xml')
         physics = mujoco.Physics.from_xml_path(xml_path)
         task = RMsimpletrajectoryEETask(random=False)
         env = control.Environment(physics, task, time_limit=1000, control_timestep=DT,
@@ -418,7 +418,7 @@ class RMsimpletrajectoryEETask(base.Task):
         episode_number = increment_function()
         print(f"initialize_episode: ", episode_number)
         # 使用格式化字符串创建文件名
-        filename = f"Astar_data/output_19.txt"
+        filename = f"Astar_data/output_{episode_number}.txt"
         with open(filename, 'r') as file:
             for line in file:
                 # 去除行尾的换行符并按空格分割
@@ -878,58 +878,59 @@ class RMpaperEETask(base.Task):
     def initialize_episode(self, physics):
         """Sets the state of the environment at the start of each episode."""
         self.initialize_robots(physics)
-        # randomize box position
+        #NOTE evaluation时随机障碍与目标小球的位置 randomize box position
         # 调用函数 sample_box_pose()，该函数返回一个表示盒子新位置和姿态的数组 cube_pose。
         cube_pose = sample_box_pose_RM()
-        # 获取与盒子关联的关节在 qpos（关节位置数组）中的起始索引。具体来说，它使用 name2id 方法，通过给定的关节名称 'red_box_joint' 查找对应的索引。'joint' 指定了查找的类别为关节。
-        # NOTE 源代码用index赋角度的方法不好
-        # box_start_idx = physics.model.name2id('red_box_joint', 'joint')
-        # print("box_start_idx: ",box_start_idx)
+        cube_pose = [-0.8, 1, 0.25, 1, 0, 0, 0]
+
         # 将新采样的盒子位置和姿态 (cube_pose) 复制到物理模拟的数据结构中。
         np.copyto(physics.named.data.qpos['red_box_joint'], cube_pose)
-        # print(f"box: ", physics.named.data.qpos['red_box_joint'])
-        # print(f"randomized cube position to {cube_position}")
-        # print(f"initialize_episode: ", increment_function())
+
+        ball_pose = sample_ball_pose_RM()
+        ball_pose = [-0.5, 0.45, 0.4, 1, 0, 0, 0]
+        np.copyto(physics.named.data.qpos['ball_joint'], ball_pose)
+        np.copyto(physics.named.model.site_pos['hook'], ball_pose[:3])
+
+        np.copyto(physics.named.model.site_pos['anchor'], ball_pose[:3])
+        print("box_pos: ", cube_pose)
+        print("ball_pos: ",ball_pose)
+
+        # NOTE 采集数据时，调用文件位置
         # 调用函数以获取当前的计数器值
-        episode_number = increment_function()
-        print(f"initialize_episode: ", episode_number)
-        # 使用格式化字符串创建文件名
-        filename = f"Astar_data/output_19.txt"
-        with open(filename, 'r') as file:
-            for line in file:
-                # 去除行尾的换行符并按空格分割
-                line = line.strip()
-                if line.startswith('target'):
-                    target_pos = list(map(float, line.split(':')[1].strip().split()))
-                    target_quat = np.array([1, 0, 0, 0])
-                    target = np.concatenate([target_pos, target_quat])
-                    # print('target:', target)
-                    if len(target) == 7:
-                        # ball_idx = physics.model.name2id('ball_joint', 'joint')
-                        # print("ball_idx: ",ball_idx)
-                        np.copyto(physics.named.data.qpos['ball_joint'], target)
-                        print(f"ball_pos: ", physics.named.data.qpos['ball_joint'])
-                        np.copyto(physics.named.model.site_pos['hook'], target_pos)
-                        np.copyto(physics.named.model.site_pos['anchor'], target_pos)
-                    else:
-                        print("Target position does not contain exactly 3 values.")
+        # episode_number = increment_function()
+        # print(f"initialize_episode: ", episode_number)
+        # # 使用格式化字符串创建文件名
+        # filename = f"Astar_data/output_19.txt"
+        # with open(filename, 'r') as file:
+        #     for line in file:
+        #         # 去除行尾的换行符并按空格分割
+        #         line = line.strip()
+        #         if line.startswith('target'):
+        #             target_pos = list(map(float, line.split(':')[1].strip().split()))
+        #             target_quat = np.array([1, 0, 0, 0])
+        #             target = np.concatenate([target_pos, target_quat])
+        #             # print('target:', target)
+        #             if len(target) == 7:
+        #                 # ball_idx = physics.model.name2id('ball_joint', 'joint')
+        #                 # print("ball_idx: ",ball_idx)
+        #                 np.copyto(physics.named.data.qpos['ball_joint'], target)
+        #                 print(f"ball_pos: ", physics.named.data.qpos['ball_joint'])
+        #                 np.copyto(physics.named.model.site_pos['hook'], target_pos)
+        #                 np.copyto(physics.named.model.site_pos['anchor'], target_pos)
+        #             else:
+        #                 print("Target position does not contain exactly 3 values.")
+        #
+        #         if line.startswith('obstacle'):
+        #             obstacle_pose = list(map(float, line.split(':')[1].strip().split()))
+        #             obstacle_quat = np.array([1, 0, 0, 0])
+        #             obstcale = np.concatenate([obstacle_pose, obstacle_quat])
+        #             if len(obstcale) == 7:
+        #                 np.copyto(physics.named.data.qpos['red_box_joint'], obstcale)
+        #                 print(f"box_pos: ", physics.named.data.qpos['red_box_joint'])
+        #             else:
+        #                 print("Box position does not contain exactly 3 values.")
 
-                if line.startswith('obstacle'):
-                    obstacle_pose = list(map(float, line.split(':')[1].strip().split()))
-                    obstacle_quat = np.array([1, 0, 0, 0])
-                    obstcale = np.concatenate([obstacle_pose, obstacle_quat])
-                    if len(obstcale) == 7:
-                        np.copyto(physics.named.data.qpos['red_box_joint'], obstcale)
-                        print(f"box_pos: ", physics.named.data.qpos['red_box_joint'])
-                    else:
-                        print("Box position does not contain exactly 3 values.")
 
-                    # line.split(':') 将字符串按 : 分割，得到 ['target', '-0.49 0.58 0.4']。
-                    # line.split(':')[1] 选择分割后数组的第二个元素，即 '-0.49 0.58 0.4'。
-                    # .strip() 去除选择元素的首尾空白字符（包括换行符）。
-                    # .split() 按空格分割处理后的字符串，得到 ['-0.49', '0.58', '0.4']。
-                    # map(float, ...) 将列表中的每个字符串元素转换成浮点数。
-                    # list(...) 将 map 对象转换成列表。
         # print(physics.data.qpos)
         super().initialize_episode(physics)
 

@@ -9,17 +9,17 @@ import numpy as np
 DATA_DIR = '/home/juyiii/data/aloha/'
 REALMAN_TASK_CONFIGS = {
     'rmreal_pick':{
-        'dataset_dir': DATA_DIR + '/rmreal_pick',
-        'num_episodes': 38,
-        'episode_len': 90,
-        'camera_names': ['image_100', 'image_110']
+        'dataset_dir': DATA_DIR + '/20250311',
+        'num_episodes': 30,
+        'episode_len': 603,
+        'camera_names': ['image_1', 'image_2']
     },
 
 }
 SIM_TASK_CONFIGS = {
     'sim_RM_simpletrajectory':{
-        'dataset_dir': DATA_DIR + '/sim_RM_Astar_teleoperation_adjusted',
-        'num_episodes': 123,
+        'dataset_dir': DATA_DIR + '/sim_RM_Astar_4',
+        'num_episodes': 85,
         'episode_len': 1000,
         # 'camera_names': ['top', 'left_wrist', 'right_wrist']
         'camera_names': ['top', 'angle']

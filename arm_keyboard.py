@@ -1,3 +1,4 @@
+# 按TAB键，切换键盘控制和自主避障控制
 import numpy as np
 from dm_control.viewer.gui import glfw_gui
 from dm_control.utils import inverse_kinematics as ik
@@ -32,7 +33,7 @@ data = mujoco.MjData(model)                     # MuJoCo data
 cam = mujoco.MjvCamera()                        # Abstract camera
 opt = mujoco.MjvOption()                        # visualization options
 physics = mujoco.Physics.from_xml_path(xml_path)
-task = RMpaperEETask(random=False)  # 这个task是之前的task，改掉
+task = RMpaperEETask(random=False)
 env = control.Environment(physics, task, time_limit=2000, control_timestep=DT,
                                   n_sub_steps=None, flat_observation=False)
 ts = env.reset()
@@ -61,7 +62,12 @@ all_actions = []
 pre_action = []
 target_action = []
 query_timestep = 0
-
+box_move = ['right', 'left', 'forward', 'back']
+ee_pos = []
+isinterpolated = False
+interpolated_trajectory = []
+target_qpos = []
+interpolate_time = 0
 
 def ik_test():
     # 目标参数
@@ -163,9 +169,10 @@ def get_image(ts, camera_names, rand_crop_resize=False):
     return curr_image
 
 class Teleoperation_Policy:
-    def __init__(self, env, window, move_speed=0.001, rotate_speed=1):
+    def __init__(self, env, window, args, move_speed=0.001, rotate_speed=1):
         self.env = env
         self.window = window
+        self.args = args
         self.move_speed = move_speed
         self.rotate_speed = rotate_speed
         self.mocap_left_xpos = np.array(env._physics.named.data.xpos['mocap_left'])
@@ -178,6 +185,8 @@ class Teleoperation_Policy:
         self.debounce_interval = 0.1  # 去抖动时间间隔，单位：秒
         self.MYBpolicy = None
         self.stats = None
+        self.query_frequency = 100
+        self.all_time_actions = torch.zeros([2000, 2000+100, 16]).cuda()
 
         # print(f"initial_quat: ", self.mocap_left_quat)
 
@@ -228,10 +237,27 @@ class Teleoperation_Policy:
         elif direction == "0":
             self.left_gripper = 0
 
+    def update_box(self, direction):
+        box_length = 0.005
+        # 更新box的位置信息
+        box_pos = env._physics.named.data.qpos['red_box_joint']
+        print(box_pos)
+        if direction == "right":
+            # box的位置往右移0.05, 也就是y的负方向
+            box_pos[1] -= box_length
+        elif direction == "left":
+            box_pos[1] += box_length  # 左移0.05单位
+
+        elif direction == "forward":
+            box_pos[0] -= box_length # 上移0.05单位
+
+        elif direction == "back":
+            box_pos[0] += box_length  # 下移0.05单位
+
     def load_policy(self):
         from imitate_episodes_teleoperation import make_policy
         policy_config = {'lr': 1e-5,
-                         'num_queries': 100,
+                         'num_queries': self.args['chunk_size'],
                          'kl_weight': 10,
                          'hidden_dim': 512,
                          'dim_feedforward': 3200,
@@ -246,7 +272,7 @@ class Teleoperation_Policy:
                          'vq_dim': None,
                          'action_dim': 16,
                          'no_encoder': False,
-                         'ckpt_dir': "ckpt/sim_RM_Astar_teleoperation",
+                         'ckpt_dir': self.args['ckpt_dir'],
                          'policy_class': "ACT",
                          'seed': 0,
                          'num_steps': 20000,
@@ -254,19 +280,26 @@ class Teleoperation_Policy:
         # MYBpolicy = make_policy("ACT", policy_config)
         from policy import ACTPolicy
         self.MYBpolicy = ACTPolicy(policy_config)
-        ckpt_dir = "ckpt/sim_RM_Astar_teleoperation"
+        ckpt_dir = self.args['ckpt_dir']
         ckpt_name = "policy_best.ckpt"
         ckpt_path = os.path.join(ckpt_dir, ckpt_name)
         loading_status = self.MYBpolicy.deserialize(torch.load(ckpt_path))
         print(loading_status)
         self.MYBpolicy.cuda()
         self.MYBpolicy.eval()
+        temporal_agg = self.args['temporal_agg']
+        if temporal_agg:
+            self.query_frequency = 1
         return self.MYBpolicy
 
     def query_policy(self, tab):
-        global target_qpos, query_timestep, all_actions, ts
-        if query_timestep == 0:
-            ckpt_dir = "ckpt/sim_RM_Astar_teleoperation"
+        global target_qpos, query_timestep, all_actions, ts, interpolated_trajectory, isinterpolated, interpolate_time
+
+        temporal_agg = self.args['temporal_agg']
+        qpos_numpy = []
+
+        if query_timestep == 0 and not isinterpolated:
+            ckpt_dir = self.args['ckpt_dir']
             stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
             print(os.path.getsize(stats_path))  # 检查文件大小，如果返回 0 表示文件为空
             with open(stats_path, 'rb') as f:
@@ -274,39 +307,78 @@ class Teleoperation_Policy:
             self.MYBpolicy = self.load_policy()
 
         with torch.inference_mode():
+            if not isinterpolated:
 
-            # print("here")
-            query_frequency = 100
-            pre_process = lambda s_qpos: (s_qpos - self.stats['qpos_mean']) / self.stats['qpos_std']
+                pre_process = lambda s_qpos: (s_qpos - self.stats['qpos_mean']) / self.stats['qpos_std']
 
-            obs = ts.observation
-            qpos_numpy = np.array(obs['qpos'])
-            # print(qpos_numpy)
-            pre_action.append(qpos_numpy)
+                obs = ts.observation
+                qpos_numpy = np.array(obs['qpos'])
+                # print(qpos_numpy)
+                pre_action.append(qpos_numpy)
 
-            curr_image = get_image(ts, camera_names, rand_crop_resize=False)
+                curr_image = get_image(ts, camera_names, rand_crop_resize=False)
 
-            qpos = pre_process(qpos_numpy)
-            qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+                qpos = pre_process(qpos_numpy)
+                qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
 
-            if query_timestep % query_frequency == 0:
+                if query_timestep % self.query_frequency == 0:
 
-                if query_timestep == 0:
-                    # warm up
-                    for _ in range(1):
-                        self.MYBpolicy(qpos, curr_image)
-                    print('network warm up done')
-                all_actions = self.MYBpolicy(qpos, curr_image)
-            # print(f"all action(10)", all_actions[:10])
-            raw_action = all_actions[:, query_timestep % query_frequency]
-            raw_action = raw_action.squeeze(0).cpu().numpy()
-            # 后处理 去归一化
-            post_process = lambda a: a * self.stats['action_std'] + self.stats['action_mean']
-            action = post_process(raw_action)
-            target_qpos = action[:-2]
+                    if query_timestep == 0:
+                        # warm up
+                        for _ in range(1):
+                            self.MYBpolicy(qpos, curr_image)
+                        print('network warm up done')
+                    all_actions = self.MYBpolicy(qpos, curr_image)
+                # print(f"all action(10)", all_actions[:10])
+                if temporal_agg:
+                    self.all_time_actions[[timestep], timestep:timestep + self.args['chunk_size']] = all_actions
+                    actions_for_curr_step = self.all_time_actions[:, timestep]
+                    actions_populated = torch.all(actions_for_curr_step != 0, axis=1) # 用来检查哪些动作在所有维度中都不为零，从而筛选出已填充的有效动作
+                    actions_for_curr_step = actions_for_curr_step[actions_populated]
+                    k = 0.01
+                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                    exp_weights = exp_weights / exp_weights.sum()
+                    exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+                    raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
+                else:
+                    raw_action = all_actions[:, query_timestep % self.query_frequency]
+
+                raw_action = raw_action.squeeze(0).cpu().numpy()
+
+                # 后处理 去归一化
+                post_process = lambda a: a * self.stats['action_std'] + self.stats['action_mean']
+                action = post_process(raw_action)
+                target_qpos = action[:-2]
+
+            num_steps = 30
+            if query_timestep == 0 and not isinterpolated:
+                print("开始插值")
+                isinterpolated = True
+                # 对当前关节角与target_action进行插值
+                # num_steps = 10  # 假设在 10 个步骤内进行插值
+                interpolate_time = 0
+                # 线性插值计算，逐步平滑过渡
+                for step in range(num_steps + 1):  # +1 包括初始值
+                    alpha = step / num_steps  # alpha 逐步从 0 变到 1
+                    interpolated_action = (1 - alpha) * qpos_numpy + alpha * np.array(target_qpos)  # 插值公式
+                    interpolated_trajectory.append(interpolated_action)
+
+                # 将插值结果转换为 numpy 数组以便于后续使用
+                interpolated_trajectory = np.array(interpolated_trajectory)
+
+            if isinterpolated and interpolate_time < num_steps:
+                print("插值time： ", interpolate_time)
+                target_qpos = interpolated_trajectory[interpolate_time]
+                interpolate_time = interpolate_time + 1
+                if interpolate_time == num_steps:
+                    isinterpolated = False
+                    interpolate_time = 0
+                    query_timestep = query_timestep + 1
+            else:
+                query_timestep = query_timestep + 1
+
             target_action.append(target_qpos)
             # print(f"qpos_target: ", target_qpos)
-            query_timestep = query_timestep + 1
 
     def handle_keyboard_input(self, window):
         global timestep, ispolicy, ts, query_timestep
@@ -334,6 +406,11 @@ class Teleoperation_Policy:
 
             glfw.KEY_TAB: ('TAB', self.query_policy),
 
+            glfw.KEY_RIGHT: ('right', self.update_box),
+            glfw.KEY_LEFT: ('left', self.update_box),
+            glfw.KEY_UP: ('forward', self.update_box),
+            glfw.KEY_DOWN: ('back', self.update_box),
+
         }
         # 遍历所有按键
         for key, (action, func) in key_actions.items():
@@ -343,70 +420,81 @@ class Teleoperation_Policy:
                 if current_time - last_time > self.debounce_interval:
                     func(action)  # 执行动作
                     print(f"press: {action} \n")
-                    if action == 'TAB':
-                        ispolicy = True
-                        # 获取所有 weld 约束的数量
-                        # num_welds = env._physics.model.eq_type.size
-                        # print(num_welds)
-                        # 关闭 weld 约束（例如，移除 mocap 绑定）
-                        env._physics.model.eq_active[:] = 0  # 禁用所有 weld 约束
+                    if action not in box_move:
+                        if action == 'TAB':
+                            ispolicy = True
+                            # 获取所有 weld 约束的数量
+                            # num_welds = env._physics.model.eq_type.size
+                            # print(num_welds)
+                            # 关闭 weld 约束（例如，移除 mocap 绑定）
+                            env._physics.model.eq_active[:] = 0  # 禁用所有 weld 约束
 
-                    else:
-                        if ispolicy:
-                            query_timestep = 0
-                            print("修改mocap的位姿")
-                            # 获取当前位置机械臂末端的位姿并得到对应的mocap的位置
-                            # 姿态偏移量
-                            lefthand_set_quat = Quaternion([-0.53739432, -0.45963982, 0.53696655, -0.46000599])
-                            leftmocap_set_quat = Quaternion([1, 0, 0, 0])
-                            leftdelt_quat = leftmocap_set_quat / lefthand_set_quat
-                            righthand_set_quat = Quaternion([-0.75968791, 0, 0, 0.65028784])
-                            rightmocap_set_quat = Quaternion([1, 0, 0, 0])
-                            rightdelt_quat = rightmocap_set_quat / righthand_set_quat
-                            # 位置偏移量
-                            leftdelt_pos = np.array([-0.0393153, 0.00838329, -0.00360406])
-                            rightdelt_pos = np.array([-0.0401231, -0.0012093, -0.0036001])
+                        else:
+                            if ispolicy:
+                                query_timestep = 0
+                                print("修改mocap的位姿")
+                                # 获取当前位置机械臂末端的位姿并得到对应的mocap的位置
+                                # 姿态偏移量
+                                lefthand_set_quat = Quaternion([-0.53739432, -0.45963982, 0.53696655, -0.46000599])
+                                leftmocap_set_quat = Quaternion([1, 0, 0, 0])
+                                leftdelt_quat = leftmocap_set_quat / lefthand_set_quat
+                                righthand_set_quat = Quaternion([-0.75968791, 0, 0, 0.65028784])
+                                rightmocap_set_quat = Quaternion([1, 0, 0, 0])
+                                rightdelt_quat = rightmocap_set_quat / righthand_set_quat
+                                # 位置偏移量
+                                leftdelt_pos = np.array([-0.0393153, 0.00838329, -0.00360406])
+                                rightdelt_pos = np.array([-0.0401231, -0.0012093, -0.0036001])
 
-                            # 获取当前机械臂末端的位姿
-                            lefthand_xpos = env._physics.named.data.xpos['handforcesensor3']
-                            lefthand_quat = Quaternion(env._physics.named.data.xquat['handforcesensor3'])
-                            righthand_xpos = env._physics.named.data.xpos['handforcesensor4']
-                            righthand_quat = Quaternion(env._physics.named.data.xquat['handforcesensor4'])
+                                # 获取当前机械臂末端的位姿
+                                lefthand_xpos = env._physics.named.data.xpos['handforcesensor3']
+                                lefthand_quat = Quaternion(env._physics.named.data.xquat['handforcesensor3'])
+                                righthand_xpos = env._physics.named.data.xpos['handforcesensor4']
+                                righthand_quat = Quaternion(env._physics.named.data.xquat['handforcesensor4'])
 
-                            # 更新mocap的位姿
-                            leftmocap_quat = lefthand_quat * leftdelt_quat
-                            leftmocap_xpos = lefthand_xpos + leftdelt_pos
-                            rightmocap_quat = righthand_quat * rightdelt_quat
-                            rightmocap_xpos = righthand_xpos + rightdelt_pos
+                                # 更新mocap的位姿
+                                leftmocap_quat = lefthand_quat * leftdelt_quat
+                                leftmocap_xpos = lefthand_xpos + leftdelt_pos
+                                rightmocap_quat = righthand_quat * rightdelt_quat
+                                rightmocap_xpos = righthand_xpos + rightdelt_pos
 
-                            self.mocap_left_xpos = leftmocap_xpos
-                            self.mocap_left_quat = leftmocap_quat
-                            self.mocap_right_xpos = rightmocap_xpos
-                            self.mocap_right_quat = rightmocap_quat
+                                self.mocap_left_xpos = leftmocap_xpos
+                                self.mocap_left_quat = leftmocap_quat
+                                self.mocap_right_xpos = rightmocap_xpos
+                                self.mocap_right_quat = rightmocap_quat
 
-                        ispolicy = False
-                        env._physics.model.eq_active[:] = 1  # 开启所有 weld 约束
+                            ispolicy = False
+                            self.all_time_actions.detach().zero_()
 
-                    # ik_test()
-                    teleoperation_qpos.append(self.get_qpos())
-                    camera_top.append(physics.render(height=480, width=640, camera_id='top'))
-                    camera_angle.append(physics.render(height=480, width=640, camera_id='angle'))
+                            env._physics.model.eq_active[:] = 1  # 开启所有 weld 约束
 
-                    self.last_key_time[key] = current_time  # 更新按键的最后按下时间
+                        # ik_test()
+                        teleoperation_qpos.append(self.get_qpos())
+                        camera_top.append(physics.render(height=480, width=640, camera_id='top'))
+                        camera_angle.append(physics.render(height=480, width=640, camera_id='angle'))
 
-                    obs = ts.observation
-                    if 'images' in obs:
-                        image_list.append(obs['images'])
-                    else:
-                        image_list.append({'main': obs['image']})
-                    qpos_numpy = np.array(obs['qpos'])
-                    # 将当前时间步的 qpos 添加到列表中
-                    qpos_history_raw.append(qpos_numpy)
+                        self.last_key_time[key] = current_time  # 更新按键的最后按下时间
 
-                    # qpos_history_raw[timestep] = qpos_numpy
+                        obs = ts.observation
+                        if 'images' in obs:
+                            image_list.append(obs['images'])
+                        else:
+                            image_list.append({'main': obs['image']})
+                        qpos_numpy = np.array(obs['qpos'])
+                        # 将当前时间步的 qpos 添加到列表中
+                        qpos_history_raw.append(qpos_numpy)
 
-                    timestep = timestep + 1
-                    print(timestep)
+                        # qpos_history_raw[timestep] = qpos_numpy
+
+                        left_xpos = env._physics.named.data.xpos['handforcesensor3']
+                        print("left_eepos: ", left_xpos)
+                        # left_quat = Quaternion(env._physics.named.data.xquat['handforcesensor3'])
+                        # right_xpos = env._physics.named.data.xpos['handforcesensor4']
+                        # right_quat = Quaternion(env._physics.named.data.xquat['handforcesensor4'])
+                        ee_pos.append(np.array(left_xpos))
+                        print("eepos last: ", ee_pos[-1])
+
+                        timestep = timestep + 1
+                        print(timestep)
 
                     break  # 防止多个按键同时触发
 
@@ -531,12 +619,12 @@ def save_qpos_to_txt(file_path):
 
 
 # 定义渲染函数
-def render_func():
-    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep
+def render_func(args):
+    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep, ee_pos
 
     # 只在首次调用时初始化 policy
     if policy is None:
-        policy = Teleoperation_Policy(env, window)
+        policy = Teleoperation_Policy(env, window,args)
 
     action = policy(window)
     # print(action)
@@ -570,8 +658,9 @@ def render_func():
     glfw_window = window._context.window  # 获取 GLFW 窗口实例
     if glfw.get_key(glfw_window, glfw.KEY_SPACE) == glfw.PRESS:
         print("空格键按下，退出遥控模式...")
-        np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
-        np.savetxt('target_action.txt', target_action, fmt='%f')
+        # np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
+        # np.savetxt('target_action.txt', target_action, fmt='%f')
+        np.savetxt('dynamic_obstacle/3.txt', ee_pos, fmt='%f')
 
         # # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")
         # save_qpos_to_txt(f"EEpos/20_3/teleoperation_qpos_{num_episode}.txt")
@@ -625,7 +714,7 @@ def main(args):
     global num_episode
     num_episode = args['num_episodes']
     # 运行窗口事件循环并展示图像
-    window.event_loop(render_func)
+    window.event_loop(lambda: render_func(args))
 
 
 if __name__ == '__main__':
@@ -662,7 +751,6 @@ if __name__ == '__main__':
     parser.add_argument('--vq_class', action='store', type=int, help='vq_class')
     parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim')
     parser.add_argument('--no_encoder', action='store_true')
-
 
     main(vars(parser.parse_args()))
 

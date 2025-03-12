@@ -9,10 +9,27 @@ import cv2
 from Robotic_Arm.rm_robot_interface import *
 from realman.constants import HAND_UNNORMALIZE, HAND_NORMALIZE
 from realman.robotic_arm_package.robotic_arm import *
+import pickle
+import argparse
+from einops import rearrange
+import torch
+from torchvision import transforms
 
 
 import IPython
 e = IPython.embed
+
+all_actions = []
+pre_action = []
+target_action = []
+
+query_frequency = 100
+
+# from ..constants import SIM_TASK_CONFIGS
+# camera_names = SIM_TASK_CONFIGS['sim_RM_simpletrajectory']['camera_names']
+camera_names = ['image_100', 'image_110']
+
+all_time_actions = torch.zeros([2000, 2000+100, 16]).cuda()
 
 class RealmanEnv:
     """
@@ -50,9 +67,10 @@ class RealmanEnv:
 
         # Initialize camera
         self.camera_serial_110 = 'f1420921'
-        self.camera_serial_100 = 'f0233166'
+        self.camera_serial_100 = 'f1381658'
         self.pipelines = {}
         self.init_L515()
+        self.qpos_obs = []
 
     def init_L515(self):
 
@@ -71,9 +89,11 @@ class RealmanEnv:
             config = rs.config()
             config.enable_device(serial)
             if serial == self.camera_serial_100:
-                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+                config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
+                print(serial)
             if serial == self.camera_serial_110:
                 config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+                print(serial)
 
             pipeline.start(config)
 
@@ -84,6 +104,10 @@ class RealmanEnv:
         # device_product_line = str(device.get_info(rs.camera_info.product_line))
         # config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
         # self.pipeline.start(config)
+
+    # def init_camera(self):
+    #
+
 
     def get_images(self):
         print(f"enter get_images")
@@ -96,9 +120,10 @@ class RealmanEnv:
             color_frame = frames.get_color_frame()
             color_image = np.asanyarray(color_frame.get_data())
             if serial == self.camera_serial_110:
-                color_image = cv2.resize(color_image, (640, 480))
+                # color_image = cv2.resize(color_image, (640, 480))
                 image_dict['image_110'] = color_image
             if serial == self.camera_serial_100:
+                color_image = cv2.resize(color_image, (640, 480))
                 image_dict['image_100'] = color_image
                 print(f"find image_100")
 
@@ -133,20 +158,20 @@ class RealmanEnv:
         _, left_joint = self.left_arm.Get_Joint_Degree()
         _, right_joint = self.right_arm.Get_Joint_Degree()
 
-        obs['qpos'] = self.get_qpos()
-        obs['qvel'] = self.get_qvel()
+        obs['qpos'] = self.qpos_obs
+        # obs['qvel'] = self.get_qvel()
         obs['images'] = self.get_images()
         return obs
 
     def reset(self, v=1, r=0, connect=0, block=1):
         # 重置机械臂
-        leftarm_init = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        rightarm_init = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        lefthand_init = [999, 999, 999, 999, 999, 999]
+        leftarm_init = [-48.25076675415039,	81.26905059814453,	95.61441040039062,	-65.92607116699219,	-18.751447677612305,	50.00055694580078,	117.73294830322266]
+        rightarm_init = [0.613353431224823,	86.6451416015625,	36.15856170654297,	70.44635009765625,	118.0,	-41.428016662597656,	-120.0,	180.0]
+        lefthand_init = [999, 999, 999, 999, 999, 1]
         righthand_init = [999, 999, 999, 999, 999, 999]
 
-        self.left_arm.Movej_Cmd(leftarm_init, v, r, connect, block)
-        self.right_arm.Movej_Cmd(rightarm_init, v, r, connect, block)
+        # self.left_arm.Movej_Cmd(leftarm_init, v, r, connect, block)
+        # self.right_arm.Movej_Cmd(rightarm_init, v, r, connect, block)
         self.left_arm.Set_Hand_Angle(lefthand_init, block)
         self.right_arm.Set_Hand_Angle(righthand_init, block)
 
@@ -157,9 +182,9 @@ class RealmanEnv:
 
         _, left_qpos = self.left_arm.Get_Joint_Degree()
         _, right_qpos = self.right_arm.Get_Joint_Degree()
-        qpos_obs = np.concatenate((left_qpos, [HAND_NORMALIZE(lefthand_init)],
+        self.qpos_obs = np.concatenate((left_qpos, [HAND_NORMALIZE(lefthand_init)],
                                    right_qpos, [HAND_NORMALIZE(righthand_init)]))
-        obs['qpos'] = qpos_obs
+        obs['qpos'] = self.qpos_obs
         # NOTE qvel?
         obs['images'] = self.get_images()
         return dm_env.TimeStep(
@@ -205,19 +230,19 @@ class RealmanEnv:
         left_qpos = left_action[:7]
         right_qpos = right_action[:7]
 
-        left_movetag = self.left_arm.Movej_Cmd(left_qpos, v, r, connect, block)
-        right_movetag = self.right_arm.Movej_Cmd(right_qpos, v, r, connect, block)
+        # left_movetag = self.left_arm.Movej_Cmd(left_qpos, v, r, connect, block)
+        # right_movetag = self.right_arm.Movej_Cmd(right_qpos, v, r, connect, block)
         left_handtag = self.left_arm.Set_Hand_Angle(HAND_UNNORMALIZE(left_action[7]), block)
         right_handtag = self.right_arm.Set_Hand_Angle(HAND_UNNORMALIZE(right_action[7]), block)
 
-        print(f"left_arm: ", left_movetag, "right_arm: ", right_movetag,
-              "left_hand: ", left_handtag, "right_hand: ", right_handtag)
+        # print(f"left_arm: ", left_movetag, "right_arm: ", right_movetag,
+        #       "left_hand: ", left_handtag, "right_hand: ", right_handtag)
         obs = collections.OrderedDict()
         _, left_qpos = self.left_arm.Get_Joint_Degree()
         _, right_qpos = self.right_arm.Get_Joint_Degree()
-        qpos_obs = np.concatenate((left_qpos, [left_action[7]],
+        self.qpos_obs = np.concatenate((left_qpos, [left_action[7]],
                                    right_qpos, [right_action[7]]))
-        obs['qpos'] = qpos_obs
+        obs['qpos'] = self.qpos_obs
         obs['qpos'] = action
         # NOTE qvel?
         obs['images'] = self.get_images()
@@ -235,18 +260,20 @@ def make_rm_real_env():
     env = RealmanEnv()
     return env
 
+
 def test_realenv():
     render_cams = ['image_100']  # Camera names
     env = make_rm_real_env()
     ts = env.reset()
     episode = [ts]
-    from visualize_episodes import load_hdf5
-    qpos_list, _, _, _ = load_hdf5('/home/juyiii/data/aloha/rmreal_pick', 'episode_7')
-    qpos = np.array(qpos_list)
-    num_ts, num_dim = qpos.shape
+    # from visualize_episodes import load_hdf5
+    # qpos_list, _, _, _ = load_hdf5('/home/juyiii/data/aloha/rmreal_pick', 'episode_7')
+    # qpos = np.array(qpos_list)
+    # qpos = [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1]
+    # num_ts, num_dim = qpos.shape
     start_time = time.time()
     last_time = start_time
-    for t in range(num_ts):
+    for t in range(10):
         action = [0, 0, 0, 0, 0, 0, t, 1, 0, 0, 0, 0, 0, 0, 0, 1]
 
 
@@ -274,7 +301,128 @@ def test_realenv():
     for pipeline in env.pipelines:
         pipeline.stop()
 
+def load_policy(args):
+        from imitate_episodes_teleoperation import make_policy
+        policy_config = {'lr': 1e-5,
+                         'num_queries': args['chunk_size'],
+                         'kl_weight': 10,
+                         'hidden_dim': 512,
+                         'dim_feedforward': 3200,
+                         'lr_backbone': 1e-5,
+                         'backbone': 'resnet18',
+                         'enc_layers': 4,
+                         'dec_layers': 7,
+                         'nheads': 8,
+                         'camera_names': camera_names,
+                         'vq': False,
+                         'vq_class': None,
+                         'vq_dim': None,
+                         'action_dim': 16,
+                         'no_encoder': False,
+                         'ckpt_dir': args['ckpt_dir'],
+                         'policy_class': "ACT",
+                         'seed': 0,
+                         'num_steps': 20000,
+                         }
+        # MYBpolicy = make_policy("ACT", policy_config)
+        from policy import ACTPolicy
+        MYBpolicy = ACTPolicy(policy_config)
+        ckpt_dir = args['ckpt_dir']
+        ckpt_name = "policy_best.ckpt"
+        ckpt_path = os.path.join(ckpt_dir, ckpt_name)
+        loading_status = MYBpolicy.deserialize(torch.load(ckpt_path))
+        print(loading_status)
+        MYBpolicy.cuda()
+        MYBpolicy.eval()
+        temporal_agg = args['temporal_agg']
+        if temporal_agg:
+            query_frequency = 1
+        return MYBpolicy
+
+def query_policy(args):
+        # global target_qpos, query_timestep, all_actions, ts, interpolated_trajectory, isinterpolated, interpolate_time
+
+        env = make_rm_real_env()
+        ts = env.reset()
+        episode = [ts]
+
+        temporal_agg = args['temporal_agg']
+        qpos_numpy = []
+
+        query_frequency = 1
+        max_timesteps = 1000
+
+        for t in range(max_timesteps):
+
+            if t == 0:
+                ckpt_dir = args['ckpt_dir']
+                stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
+                print(os.path.getsize(stats_path))  # 检查文件大小，如果返回 0 表示文件为空
+                with open(stats_path, 'rb') as f:
+                    stats = pickle.load(f)
+                MYBpolicy = load_policy(args)
+
+            with torch.inference_mode():
+
+                pre_process = lambda s_qpos: (s_qpos - stats['qpos_mean']) / stats['qpos_std']
+
+                obs = ts.observation
+                qpos_numpy = np.array(obs['qpos'])
+                # print(qpos_numpy)
+                pre_action.append(qpos_numpy)
+
+                # curr_image = get_image(ts, camera_names, rand_crop_resize=False)
+                curr_image = ts.observation['images']
+
+                qpos = pre_process(qpos_numpy)
+                qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+
+                if t % query_frequency == 0:
+
+                    if t == 0:
+                        # warm up
+                        for _ in range(1):
+                            MYBpolicy(qpos, curr_image)
+                        print('network warm up done')
+                    all_actions = MYBpolicy(qpos, curr_image)
+                # print(f"all action(10)", all_actions[:10])
+                if temporal_agg:
+                    all_time_actions[[ts], ts:ts + args['chunk_size']] = all_actions
+                    actions_for_curr_step = all_time_actions[:, ts]
+                    actions_populated = torch.all(actions_for_curr_step != 0, axis=1) # 用来检查哪些动作在所有维度中都不为零，从而筛选出已填充的有效动作
+                    actions_for_curr_step = actions_for_curr_step[actions_populated]
+                    k = 0.01
+                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                    exp_weights = exp_weights / exp_weights.sum()
+                    exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+                    raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
+                else:
+                    raw_action = all_actions[:, t % query_frequency]
+
+                raw_action = raw_action.squeeze(0).cpu().numpy()
+
+                # 后处理 去归一化
+                post_process = lambda a: a * stats['action_std'] + stats['action_mean']
+                action = post_process(raw_action)
+                target_qpos = action[:-2]
+
+            ts = env.step(target_qpos)
+            episode.append(ts)
+
+        # target_action.append(target_qpos)
+        # print(f"qpos_target: ", target_qpos)
+
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--temporal_agg', action='store_true')
+    parser.add_argument('--ckpt_dir', action='store', type=str, help='ckpt_dir', required=False)
+    parser.add_argument('--chunk_size', action='store', type=int, help='chunk_size', required=False)
+
+
+    # query_policy(vars(parser.parse_args()))
+
+
     test_realenv()
 
 

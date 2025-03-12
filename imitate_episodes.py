@@ -479,7 +479,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                         else:
                             # e()
                             all_actions = policy(qpos, curr_image)
-                            print("query policy")
+                            # print(f"{t}:query policy")
 
                         # if use_actuator_net:
                         #     collect_base_action(all_actions, norm_episode_all_base_actions)

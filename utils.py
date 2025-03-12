@@ -336,8 +336,8 @@ def sample_box_pose_RM():
     # y_range = [-0.15, 0.15]
     # z_range = [0.2, 0.2]
     # -0.4 0.9 0.2
-    x_range = [-0.4, -0.4]
-    y_range = [0.8, 0.8]
+    x_range = [-0.8, -0.8]
+    y_range = [1, 1]
     z_range = [0.25, 0.25]
 
     ranges = np.vstack([x_range, y_range, z_range])
@@ -348,7 +348,7 @@ def sample_box_pose_RM():
 
 def sample_ball_pose_RM():
     x_range = [-0.45, -0.3]
-    y_range = [0.2, 0.4]
+    y_range = [0.35, 0.45]
     z_range = [0.35, 0.45]
 
     ranges = np.vstack([x_range, y_range, z_range])

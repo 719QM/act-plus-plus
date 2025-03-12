@@ -315,50 +315,50 @@ class RMsimpletrajectoryTask(base.Task):
 
             # NOTE 如果是执行imitate_episodes.py程序，进行evaluate需要对障碍物箱子目标小球位置进行随机采样，执行以下代码
             #
-            # assert BOX_POSE[0] is not None
-            # physics.named.data.qpos[-14:-7] = BOX_POSE[0]
-            #
-            # ball_pose = sample_ball_pose_RM()
-            # np.copyto(physics.named.data.qpos['ball_joint'], ball_pose)
-            # np.copyto(physics.named.model.site_pos['hook'], ball_pose[:3])
-            #
-            # np.copyto(physics.named.model.site_pos['anchor'], ball_pose[:3])
+            assert BOX_POSE[0] is not None
+            physics.named.data.qpos[-14:-7] = BOX_POSE[0]
+
+            ball_pose = sample_ball_pose_RM()
+            np.copyto(physics.named.data.qpos['ball_joint'], ball_pose)
+            np.copyto(physics.named.model.site_pos['hook'], ball_pose[:3])
+
+            np.copyto(physics.named.model.site_pos['anchor'], ball_pose[:3])
 
             # NOTE 如果是读取txt文件读取路径，执行以下代码读取障碍物位置以及目标小球位置
-            print(f"{BOX_POSE=}")
-            episode_number = increment_function_jointspace()
-            print(f"sim_env: ", episode_number)
-            # 使用格式化字符串创建文件名
-            filename = f"Astar_data/output_19.txt"
-            with open(filename, 'r') as file:
-                for line in file:
-                    # 去除行尾的换行符并按空格分割
-                    line = line.strip()
-                    if line.startswith('target'):
-                        target_pos = list(map(float, line.split(':')[1].strip().split()))
-                        target_quat = np.array([1, 0, 0, 0])
-                        target = np.concatenate([target_pos, target_quat])
-                        # print('target:', target)
-                        if len(target) == 7:
-                            # ball_idx = physics.model.name2id('ball_joint', 'joint')
-                            # print("ball_idx: ",ball_idx)
-                            np.copyto(physics.named.data.qpos['ball_joint'], target)
-                            # print(f"box_qpos: ", physics.named.data.qpos['ball_joint'])
-
-                            np.copyto(physics.named.model.site_pos['hook'], target_pos)
-
-                            np.copyto(physics.named.model.site_pos['anchor'], target_pos)
-                        else:
-                            print("Target position does not contain exactly 3 values.")
-
-                    if line.startswith('obstacle'):
-                        obstacle_pose = list(map(float, line.split(':')[1].strip().split()))
-                        obstacle_quat = np.array([1, 0, 0, 0])
-                        obstcale = np.concatenate([obstacle_pose, obstacle_quat])
-                        if len(obstcale) == 7:
-                            physics.named.data.qpos[-14:-7] = obstcale
-                        else:
-                            print("Box position does not contain exactly 3 values.")
+            # print(f"{BOX_POSE=}")
+            # episode_number = increment_function_jointspace()
+            # print(f"sim_env: ", episode_number)
+            # # 使用格式化字符串创建文件名
+            # filename = f"Astar_data/output_{episode_number}.txt"
+            # with open(filename, 'r') as file:
+            #     for line in file:
+            #         # 去除行尾的换行符并按空格分割
+            #         line = line.strip()
+            #         if line.startswith('target'):
+            #             target_pos = list(map(float, line.split(':')[1].strip().split()))
+            #             target_quat = np.array([1, 0, 0, 0])
+            #             target = np.concatenate([target_pos, target_quat])
+            #             # print('target:', target)
+            #             if len(target) == 7:
+            #                 # ball_idx = physics.model.name2id('ball_joint', 'joint')
+            #                 # print("ball_idx: ",ball_idx)
+            #                 np.copyto(physics.named.data.qpos['ball_joint'], target)
+            #                 # print(f"box_qpos: ", physics.named.data.qpos['ball_joint'])
+            #
+            #                 np.copyto(physics.named.model.site_pos['hook'], target_pos)
+            #
+            #                 np.copyto(physics.named.model.site_pos['anchor'], target_pos)
+            #             else:
+            #                 print("Target position does not contain exactly 3 values.")
+            #
+            #         if line.startswith('obstacle'):
+            #             obstacle_pose = list(map(float, line.split(':')[1].strip().split()))
+            #             obstacle_quat = np.array([1, 0, 0, 0])
+            #             obstcale = np.concatenate([obstacle_pose, obstacle_quat])
+            #             if len(obstcale) == 7:
+            #                 physics.named.data.qpos[-14:-7] = obstcale
+            #             else:
+            #                 print("Box position does not contain exactly 3 values.")
 
             # print(physics.data.qpos)
         super().initialize_episode(physics)
