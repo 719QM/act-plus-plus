@@ -18,7 +18,7 @@ import pickle
 from einops import rearrange
 import torch
 from torchvision import transforms
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as R, Slerp
 
 
 
@@ -29,7 +29,7 @@ camera_angle = []
 
 
 
-xml_path = 'assets/models/rm_bimanual_both.xml'
+xml_path = 'assets/models/rm_bimanual_CLAWAR.xml'
 # MuJoCo data structures
 model = mujoco.MjModel.from_xml_path(xml_path)  # MuJoCo model
 data = mujoco.MjData(model)                     # MuJoCo data
@@ -75,8 +75,15 @@ obstacle_distance = []
 box_left_gripper_distance = None
 left_eepos_policy = None
 left_eequat_policy = None
+isweight = False
+weight_action = []
+teleoperation_trajectory = []
+weight_record = []
+policy_trajectory = []
+weighted_trajectory = []
 
 def compute_forward_kinematics(qpos):
+    global left_eepos_policy, left_eequat_policy
     temp_physics = physics.copy(share_model=True)
     temp_physics.named.data.qpos[:len(qpos)] = qpos
     temp_physics.forward()
@@ -90,9 +97,22 @@ def compute_forward_kinematics(qpos):
     # print("right_eequat_reference: ", right_quat)
     left_eepos_policy = left_xpos
     left_eequat_policy = left_quat
+    policy_trajectory.append(left_xpos)
 
+def sigmoid_weight(d, d0=0.33, k=10):
+    """
+    计算基于距离 d 的轨迹权重，使用 Sigmoid 函数平滑过渡
 
-def weighted_pose(position_teleop, quat_teleop, position_policy, quat_policy, weight):
+    参数：
+    - d: 机械臂与障碍物的距离
+    - d0: 切换轨迹的阈值（默认 0.3m）
+    - k: 过渡的陡峭程度（默认 10，越大过渡越快）
+
+    返回：
+    - weight: 轨迹权重, 0 (完全 policy) 到 1 (完全遥操作)
+    """
+    return 1 / (1 + np.exp(-k * (d - d0)))
+def weighted_pose(position_teleop, quat_teleop, position_policy, quat_policy, d):
     """
     计算加权后的目标位姿（位置 + 姿态）
 
@@ -107,17 +127,19 @@ def weighted_pose(position_teleop, quat_teleop, position_policy, quat_policy, we
     - position_weighted: 加权后的位置 (numpy 数组, shape=(3,))
     - quat_weighted: 加权后的四元数 (numpy 数组, shape=(4,))
     """
+    weight = sigmoid_weight(d)  # 计算 Sigmoid 权重
+    print("weight: ", weight)
+    weight_record.append(weight)
 
     # 1. 位置加权（直接加权平均）
     position_weighted = weight * position_teleop + (1 - weight) * position_policy
 
     # 2. 姿态加权插值（Slerp）
-    quat_teleop = R.from_quat(quat_teleop)  # 转换为 Rotation 对象
-    quat_policy = R.from_quat(quat_policy)
-
-    # 计算球面线性插值（Slerp）
-    quat_weighted = R.slerp(weight, [quat_teleop, quat_policy])  # 进行 Slerp
-    quat_weighted = quat_weighted.as_quat()  # 转回四元数格式
+    # key_rots = R.from_quat([quat_teleop, quat_policy])  # 转换为 Rotation 对象
+    # key_times = [0, 1]  # 时间索引，对应两个姿态
+    # slerp = Slerp(key_times, key_rots)  # 创建 Slerp 对象
+    # quat_weighted = slerp(weight).as_quat()  # 计算插值并转换回四元数
+    quat_weighted = quat_teleop
 
     return position_weighted, quat_weighted
 
@@ -266,6 +288,8 @@ class Teleoperation_Policy:
         self.stats = None
         self.query_frequency = 100
         self.all_time_actions = torch.zeros([2000, 2000+100, 16]).cuda()
+        self.teleoperation_lqpos_reference = self.mocap_left_xpos
+        self.teleoperation_lquat_reference = self.mocap_left_quat
 
         # print(f"initial_quat: ", self.mocap_left_quat)
 
@@ -273,16 +297,22 @@ class Teleoperation_Policy:
         # 更新mocap的位置信息
         if direction == 'x+':
             self.mocap_left_xpos[0] += self.move_speed
+            self.teleoperation_lqpos_reference[0] += self.move_speed
         elif direction == 'x-':
             self.mocap_left_xpos[0] -= self.move_speed
+            self.teleoperation_lqpos_reference[0] -= self.move_speed
         elif direction == 'y+':
             self.mocap_left_xpos[1] += self.move_speed
+            self.teleoperation_lqpos_reference[1] += self.move_speed
         elif direction == 'y-':
             self.mocap_left_xpos[1] -= self.move_speed
+            self.teleoperation_lqpos_reference[1] -= self.move_speed
         elif direction == 'z+':
             self.mocap_left_xpos[2] += self.move_speed
+            self.teleoperation_lqpos_reference[2] += self.move_speed
         elif direction == 'z-':
             self.mocap_left_xpos[2] -= self.move_speed
+            self.teleoperation_lqpos_reference[2] -= self.move_speed
         elif direction == '0':
             self.mocap_left_xpos = np.array(env._physics.named.data.xpos['mocap_left'])
 
@@ -296,16 +326,22 @@ class Teleoperation_Policy:
         rotate_z_quat_negative = Quaternion(axis=[0.0, 0.0, 1.0], degrees=-self.rotate_speed)
         if direction == 'x+':
             self.mocap_left_quat = self.mocap_left_quat * rotate_x_quat_positive
+            self.teleoperation_lquat_reference = self.teleoperation_lquat_reference * rotate_x_quat_positive
         elif direction == 'x-':
             self.mocap_left_quat = self.mocap_left_quat * rotate_x_quat_negative
+            self.teleoperation_lquat_reference = self.teleoperation_lquat_reference * rotate_x_quat_negative
         elif direction == 'y+':
             self.mocap_left_quat = self.mocap_left_quat * rotate_y_quat_positive
+            self.teleoperation_lquat_reference = self.teleoperation_lquat_reference * rotate_y_quat_positive
         elif direction == 'y-':
             self.mocap_left_quat = self.mocap_left_quat * rotate_y_quat_negative
+            self.teleoperation_lquat_reference = self.teleoperation_lquat_reference * rotate_y_quat_negative
         elif direction == 'z+':
             self.mocap_left_quat = self.mocap_left_quat * rotate_z_quat_positive
+            self.teleoperation_lquat_reference = self.teleoperation_lquat_reference * rotate_z_quat_positive
         elif direction == 'z-':
             self.mocap_left_quat = self.mocap_left_quat * rotate_z_quat_negative
+            self.teleoperation_lquat_reference = self.teleoperation_lquat_reference * rotate_z_quat_negative
         elif direction == '0':
             self.mocap_left_quat = Quaternion(env._physics.named.data.mocap_quat['mocap_left'])
 
@@ -372,12 +408,12 @@ class Teleoperation_Policy:
         return self.MYBpolicy
 
     def query_policy(self, tab):
-        global target_qpos, query_timestep, all_actions, ts, interpolated_trajectory, isinterpolated, interpolate_time
+        global target_qpos, query_timestep, all_actions, ts
 
         temporal_agg = self.args['temporal_agg']
         qpos_numpy = []
 
-        if query_timestep == 0 and not isinterpolated:
+        if query_timestep == 0:
             ckpt_dir = self.args['ckpt_dir']
             stats_path = os.path.join(ckpt_dir, f'dataset_stats.pkl')
             print(os.path.getsize(stats_path))  # 检查文件大小，如果返回 0 表示文件为空
@@ -386,50 +422,48 @@ class Teleoperation_Policy:
             self.MYBpolicy = self.load_policy()
 
         with torch.inference_mode():
-            if not isinterpolated:
+            pre_process = lambda s_qpos: (s_qpos - self.stats['qpos_mean']) / self.stats['qpos_std']
 
-                pre_process = lambda s_qpos: (s_qpos - self.stats['qpos_mean']) / self.stats['qpos_std']
+            obs = ts.observation
+            qpos_numpy = np.array(obs['qpos'])
+            # print(qpos_numpy)
+            pre_action.append(qpos_numpy)
 
-                obs = ts.observation
-                qpos_numpy = np.array(obs['qpos'])
-                # print(qpos_numpy)
-                pre_action.append(qpos_numpy)
+            curr_image = get_image(ts, camera_names, rand_crop_resize=False)
 
-                curr_image = get_image(ts, camera_names, rand_crop_resize=False)
+            qpos = pre_process(qpos_numpy)
+            qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
 
-                qpos = pre_process(qpos_numpy)
-                qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+            if query_timestep % self.query_frequency == 0:
 
-                if query_timestep % self.query_frequency == 0:
+                if query_timestep == 0:
+                    # warm up
+                    for _ in range(1):
+                        self.MYBpolicy(qpos, curr_image)
+                    print('network warm up done')
+                all_actions = self.MYBpolicy(qpos, curr_image)
+            # print(f"all action(10)", all_actions[:10])
+            if temporal_agg:
+                self.all_time_actions[[timestep], timestep:timestep + self.args['chunk_size']] = all_actions
+                actions_for_curr_step = self.all_time_actions[:, timestep]
+                actions_populated = torch.all(actions_for_curr_step != 0, axis=1) # 用来检查哪些动作在所有维度中都不为零，从而筛选出已填充的有效动作
+                actions_for_curr_step = actions_for_curr_step[actions_populated]
+                k = 0.01
+                exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
+                exp_weights = exp_weights / exp_weights.sum()
+                exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+                raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
+            else:
+                raw_action = all_actions[:, query_timestep % self.query_frequency]
 
-                    if query_timestep == 0:
-                        # warm up
-                        for _ in range(1):
-                            self.MYBpolicy(qpos, curr_image)
-                        print('network warm up done')
-                    all_actions = self.MYBpolicy(qpos, curr_image)
-                # print(f"all action(10)", all_actions[:10])
-                if temporal_agg:
-                    self.all_time_actions[[timestep], timestep:timestep + self.args['chunk_size']] = all_actions
-                    actions_for_curr_step = self.all_time_actions[:, timestep]
-                    actions_populated = torch.all(actions_for_curr_step != 0, axis=1) # 用来检查哪些动作在所有维度中都不为零，从而筛选出已填充的有效动作
-                    actions_for_curr_step = actions_for_curr_step[actions_populated]
-                    k = 0.01
-                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
-                    exp_weights = exp_weights / exp_weights.sum()
-                    exp_weights = torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
-                    raw_action = (actions_for_curr_step * exp_weights).sum(dim=0, keepdim=True)
-                else:
-                    raw_action = all_actions[:, query_timestep % self.query_frequency]
+            raw_action = raw_action.squeeze(0).cpu().numpy()
 
-                raw_action = raw_action.squeeze(0).cpu().numpy()
+            # 后处理 去归一化
+            post_process = lambda a: a * self.stats['action_std'] + self.stats['action_mean']
+            action = post_process(raw_action)
+            target_qpos = action[:-2]
 
-                # 后处理 去归一化
-                post_process = lambda a: a * self.stats['action_std'] + self.stats['action_mean']
-                action = post_process(raw_action)
-                target_qpos = action[:-2]
-
-                query_timestep = query_timestep + 1
+            query_timestep = query_timestep + 1
 
             target_action.append(target_qpos)
 
@@ -440,7 +474,7 @@ class Teleoperation_Policy:
             # print(f"qpos_target: ", target_qpos)
 
     def handle_keyboard_input(self, window):
-        global timestep, ispolicy, ts, query_timestep
+        global timestep, ispolicy, ts, query_timestep, box_left_gripper_distance, isweight, weight_action
         glfw_window = window._context.window  # 获取真实的 GLFW 窗口实例
         current_time = time.time()  # 获取当前时间戳
 
@@ -477,6 +511,9 @@ class Teleoperation_Policy:
                 # 检查去抖动时间间隔
                 last_time = self.last_key_time.get(key, 0)
                 if current_time - last_time > self.debounce_interval:
+                    box_left_gripper_distance = compute_xy_distance('box', 'left_7')
+                    print("box_left_gripper_distance: ", box_left_gripper_distance)
+                    obstacle_distance.append(box_left_gripper_distance)
                     print(f"press: {action}")
                     func(action)  # 执行动作
                     if action not in box_move:
@@ -556,12 +593,29 @@ class Teleoperation_Policy:
                         timestep = timestep + 1
                         print(timestep)
 
-
-                    # 计算box和left_gripper_geom之间的距离
-                    box_left_gripper_distance = compute_xy_distance('box', 'left_7')
-                    print("box_left_gripper_distance: ", box_left_gripper_distance)
-                    obstacle_distance.append(box_left_gripper_distance)
-                    print("\n")
+                        # 如果机械臂与障碍的距离小于设定的d1=0.35, 则开始query policy；如果再小于d2=0.3, 则进行加权
+                        if box_left_gripper_distance < 0.4:
+                            isweight = True
+                            self.query_policy(window)
+                            # 加权
+                            position_weighted, quat_weighted = weighted_pose(self.teleoperation_lqpos_reference,
+                                                                             self.teleoperation_lquat_reference.elements,
+                                                                             left_eepos_policy,
+                                                                             left_eequat_policy.elements, box_left_gripper_distance)
+                            self.mocap_left_xpos = position_weighted
+                            self.mocap_left_quat = Quaternion(quat_weighted)
+                            action_right = np.concatenate(
+                                [self.mocap_right_xpos, self.mocap_right_quat.elements, [self.right_gripper]])
+                            weight_action = np.concatenate([np.array([0]), np.concatenate(
+                                [self.mocap_left_xpos, self.mocap_left_quat.elements, [self.left_gripper]]),
+                                                     action_right])
+                            weighted_trajectory.append(position_weighted)
+                            # 打印weight_action的shape
+                            # print("weight_action: ", weight_action.shape)
+                        else:
+                            isweight = False
+                        np.copyto(physics.named.model.site_pos['ref_point'], self.teleoperation_lqpos_reference)
+                        teleoperation_trajectory.append(np.array(self.teleoperation_lqpos_reference))
 
                     break  # 防止多个按键同时触发
 
@@ -579,15 +633,22 @@ class Teleoperation_Policy:
         return qpos
 
     def __call__(self, window):
+        global box_left_gripper_distance, ispolicy, isweight, weight_action
         # self.handle_keyboard_pos_input(window)
         # self.handle_keyboard_quat_input(window)
         # self.handle_keyboard_gripper_input(window)
         self.handle_keyboard_input(window)
         # left_quat = env._physics.named.data.xquat['mocap_left']
+        # 计算box和left_gripper_geom之间的距离
 
-        # 如果是policy，那么action应该是一个长度为1+14的向量；如果是遥操作，那么action应该是长度为1+16的向量
+        # print("\n")
+
+        # 如果是policy，那么action应该是一个长度为1+14的向量；("1" 表示是policy，"14" 表示关节角度)
+        # 如果是遥操作，那么action应该是长度为1+16的向量(1 + 3+4+1 + 3+4+1)；("0" 表示是遥操作，"3+4" 表示手臂的位置和姿态, "1" 表示夹爪的开合)
         if ispolicy:
             action = np.concatenate([np.array([1]), target_qpos])
+        elif isweight:
+            action = weight_action
         else:
             action_left = np.concatenate([self.mocap_left_xpos, self.mocap_left_quat.elements, [self.left_gripper]])
             action_right = np.concatenate([self.mocap_right_xpos, self.mocap_right_quat.elements, [self.right_gripper]])
@@ -651,9 +712,18 @@ def render_func(args):
         print("空格键按下，退出遥控模式...")
         # np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
         # np.savetxt('target_action.txt', target_action, fmt='%f')
-        np.savetxt('CLAWAR/distancetest.txt', ee_pos, fmt='%f')
+        np.savetxt('CLAWAR/experiment/k_10/4.txt', ee_pos, fmt='%f')
         # 保存与障碍距离数据至txt中
-        np.savetxt('CLAWAR/distance2.txt', obstacle_distance, fmt='%f')
+        # np.savetxt('CLAWAR/distance2.txt', obstacle_distance, fmt='%f')
+        # # 保存teleoperation_trajectory至txt中
+        # np.savetxt('CLAWAR/teleoperation_trajectory.txt', teleoperation_trajectory, fmt='%f')
+        # # 保存weight_record至txt中
+        # np.savetxt('CLAWAR/weight_record.txt', weight_record, fmt='%f')
+        # # 保存policy_trajectory至txt中
+        # np.savetxt('CLAWAR/policy_trajectory.txt', policy_trajectory, fmt='%f')
+        # # 保存weighted_trajectory至txt中
+        # np.savetxt('CLAWAR/weighted_trajectory.txt', weighted_trajectory, fmt='%f')
+
 
         # # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")
         # save_qpos_to_txt(f"EEpos/20_3/teleoperation_qpos_{num_episode}.txt")

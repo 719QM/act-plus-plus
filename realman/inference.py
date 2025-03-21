@@ -1,28 +1,11 @@
 import torch
-import numpy as np
 import os
 import pickle
-import argparse
-import matplotlib.pyplot as plt
-from copy import deepcopy
-from itertools import repeat
-from tqdm import tqdm
-from einops import rearrange
-import wandb
-import time
-from torchvision import transforms
 
-from constants import FPS
-from constants import PUPPET_GRIPPER_JOINT_OPEN
-from utils import load_data # data functions
-from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM # robot functions
-from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action # helper functions
+from utils import set_seed  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
-from visualize_episodes import save_videos
 
 from detr.models.latent_model import Latent_Model_Transformer
-
-from sim_env import BOX_POSE
 
 import IPython
 e = IPython.embed

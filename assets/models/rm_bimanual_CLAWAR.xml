@@ -1,0 +1,139 @@
+<mujoco>
+    <include file="rm_scene.xml"/>
+    <include file="rm_dependencies.xml"/>
+<!--    <include file="shadow_hand/shadowhand_default.xml"/>-->
+<!--    <include file="shadow_hand/shadowhand_assets.xml"/>-->
+
+<!--    <asset>-->
+<!--        <mesh name="fire_extinguisher" file="../Fire+Extinguisher/meshes/nsdt_cloud_202482011185571356.stl" scale="1.1 1.1 1.1"/>-->
+<!--    </asset>-->
+
+    <worldbody>
+        <site size="0.002" pos="-0.46 0.58 0.4" name="anchor"/>
+
+        <!--    teleopertaion reference point    -->
+        <body name="ref_body" pos="0 0 0">
+            <site name="ref_point" pos="-0.46 0.57 0.4" size="0.02" rgba="1 1 1 1"/>
+        </body>
+
+
+        <include file="rm_liftlink.xml"/>
+
+        <body mocap="true" name="mocap_left" pos="-0.46 0.57 0.4">
+            <site pos="0 0 0" size="0.003 0.003 0.03" type="box" name="mocap_left_site1" rgba="0 0 1 1"/> <!-- z -->
+            <site pos="0 0 0" size="0.003 0.03 0.003" type="box" name="mocap_left_site2" rgba="0 1 0 1"/> <!-- y -->
+            <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_left_site3" rgba="1 0 0 1"/> <!-- x -->
+        </body>
+        <body mocap="true" name="mocap_right" pos="-0.46 -0.57 0.4">
+            <site pos="0 0 0" size="0.003 0.003 0.03" type="box" name="mocap_right_site1" rgba="0 0 1 1"/>
+            <site pos="0 0 0" size="0.003 0.03 0.003" type="box" name="mocap_right_site2" rgba="0 1 0 1"/>
+            <site pos="0 0 0" size="0.03 0.003 0.003" type="box" name="mocap_right_site3" rgba="1 0 0 1"/>
+        </body>
+
+        <body name="box" pos="-0.4 0.8 0.25">
+            <joint name="red_box_joint" type="free" frictionloss="0.01" />
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />
+            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0" size="0.1 0.1 0.25" type="box" name="red_box" rgba="1 0 0 1" />
+        </body>
+
+        <body name="ball" pos = "-0.46 0.58 0.4">
+            <joint name="ball_joint" type="free" frictionloss="0.01" />
+            <geom name="ball_geom" pos="0 0 0" size="0.03" type="sphere" condim="4"  conaffinity="0" margin="0.001" solimp="0.99 0.99 0.01" solref="0.02 1" rgba="0 1 0 1"/>
+            <inertial pos="0 0 0" mass="0.01" diaginertia="0.002 0.002 0.002" />
+            <site size="0.002" pos="0 0 0" name="hook"/>
+        </body>
+<!--        <body name="fire_extinguisher" pos="0.7 0.2 0.008" euler="1.57 1.57 0 ">-->
+<!--            <joint name="fire_extinguisher_joint" type="free" frictionloss="0.01" />-->
+<!--            <inertial pos="0 0 0" mass="0.05" diaginertia="0.002 0.002 0.002" />-->
+<!--            <geom condim="4" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" pos="0 0 0"  type="mesh" mesh="fire_extinguisher" name="fire_extinguisher"  material="red"/>-->
+<!--        </body>-->
+    </worldbody>
+
+    <tendon>
+        <spatial limited="true" range="0 0.02" width="0.001">
+            <site site="hook"/>
+            <site site="anchor"/>
+        </spatial>
+    </tendon>
+
+    <equality>
+        <weld body1="mocap_left" body2="handforcesensor3" solref="0.01 1" solimp=".25 .25 0.001" />
+        <weld body1="mocap_right" body2="handforcesensor4" solref="0.01 1" solimp=".25 .25 0.001" />
+    </equality>
+
+<!--    <include file="shadow_hand/shadowhand_extend.xml"/>-->
+<!--    <include file="shadow_hand/shadowhand_actuator.xml"/>-->
+
+    <actuator>
+            <position name="pleft_gripper" ctrllimited="true" ctrlrange="0 0.06" joint="left_joint_7"  kp="200" user="1"/>
+            <position name="pright_gripper" ctrllimited="true" ctrlrange="0 0.06" joint="right_joint_7"  kp="200" user="1"/>
+
+
+<!--&lt;!&ndash;            <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="80" user="1"/>&ndash;&gt;-->
+<!--&lt;!&ndash;            <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="80" user="1"/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;            <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="80" user="1"/>&ndash;&gt;-->
+<!--&lt;!&ndash;            <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="80" user="1"/>&ndash;&gt;-->
+
+<!--&lt;!&ndash;            <velocity name="vleft_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_up_joint"  kv="40"/>&ndash;&gt;-->
+<!--&lt;!&ndash;            <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>&ndash;&gt;-->
+<!--&lt;!&ndash;            <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>&ndash;&gt;-->
+<!--&lt;!&ndash;            <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>&ndash;&gt;-->
+            <position name="pleft_joint_1"  ctrllimited="true" ctrlrange="-3.106686 3.106686" joint="left_joint_1"  kp="800" forcelimited="true" forcerange="-150 150" user="1"/>
+            <position name="pleft_joint_2"  ctrllimited="true" ctrlrange="-2.268928 2.268928" joint="left_joint_2"  kp="1000" forcelimited="true" forcerange="-300 300" user="1"/>
+            <position name="pleft_joint_3"   ctrllimited="true" ctrlrange="-2.35619449 2.35619449" joint="left_joint_3"  kp="800" forcelimited="true" forcerange="-100 100" user="1"/>
+            <position name="pleft_joint_4"  ctrllimited="true" ctrlrange="-3.106686 3.106686" joint="left_joint_4"  kp="500" forcelimited="true" forcerange="-100 100" user="1"/>
+            <position name="pleft_joint_5" ctrllimited="true" ctrlrange="-2.234 2.234" joint="left_joint_5"  kp="500" user="1"/>
+            <position name="pleft_joint_6"  ctrllimited="true" ctrlrange="-6.2831853 6.2831853" joint="left_joint_6"  kp="500" user="1"/>
+        <!--    <position name="pleft_gripper" ctrllimited="true" ctrlrange="0 0.06" joint="left_joint_7"  kp="200" user="1"/>-->
+        <!--    <position name="pleft_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_left_up_joint"  kp="200" user="1"/>-->
+        <!--    <position name="pleft_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_left_down_joint"  kp="200" user="1"/>-->
+
+            <position name="pright_joint_1"  ctrllimited="true" ctrlrange="-3.106686 3.106686" joint="right_joint_1" kp="800" forcelimited="true" forcerange="-150 150" user="1"/>
+            <position name="pright_joint_2" ctrllimited="true" ctrlrange="-2.268928 2.268928" joint="right_joint_2" kp="1000" forcelimited="true" forcerange="-300 300" user="1"/>
+            <position name="pright_joint_3"  ctrllimited="true" ctrlrange="-2.35619449 2.35619449" joint="right_joint_3" kp="800" forcelimited="true" forcerange="-100 100" user="1"/>
+            <position name="pright_joint_4" ctrllimited="true" ctrlrange="-3.106686 3.106686" joint="right_joint_4" kp="500" forcelimited="true" forcerange="-100 100" user="1"/>
+            <position name="pright_joint_5"  ctrllimited="true" ctrlrange="-2.234 2.234" joint="right_joint_5" kp="500" user="1"/>
+            <position name="pright_joint_6" ctrllimited="true" ctrlrange="-6.2831853 6.2831853" joint="right_joint_6" kp="500" user="1"/>
+        <!--    <position name="pright_gripper" ctrllimited="true" ctrlrange="0 0.06" joint="right_joint_7"  kp="200" user="1"/>-->
+        <!--    <position name="pright_joint_gripper_up"   ctrllimited="true" ctrlrange="-0.1 0" joint="gripper_right_up_joint"  kp="200" user="1"/>-->
+        <!--    <position name="pright_joint_gripper_down"   ctrllimited="true" ctrlrange="0 0.1" joint="gripper_right_down_joint"  kp="200" user="1"/>-->
+
+            <velocity name="vleft_gripper" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_7"  kv="40"/>
+            <velocity name="vright_gripper" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_7"  kv="40"/>
+
+            <velocity name="vleft_joint_1"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_1"  kv="80"/>
+            <velocity name="vleft_joint_2"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_2"  kv="80"/>
+            <velocity name="vleft_joint_3"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_3"  kv="80"/>
+            <velocity name="vleft_joint_4"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_4"  kv="50"/>
+            <velocity name="vleft_joint_5"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_5"  kv="50"/>
+            <velocity name="vleft_joint_6"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_6"  kv="40"/>
+        <!--    <velocity name="vleft_gripper" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="left_joint_7"  kv="40"/>-->
+
+        <!--&lt;!&ndash;    <velocity name="vleft_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_up_joint"  kv="40"/>&ndash;&gt;-->
+        <!--&lt;!&ndash;    <velocity name="vleft_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_left_down_joint"  kv="40"/>&ndash;&gt;-->
+        <!--&lt;!&ndash;    <velocity name="vright_joint_gripper_up"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_up_joint"  kv="40"/>&ndash;&gt;-->
+        <!--&lt;!&ndash;    <velocity name="vright_joint_gripper_down"  ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="gripper_right_down_joint"  kv="40"/>&ndash;&gt;-->
+
+
+            <velocity name="vright_joint_1" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_1" kv="80"/>
+            <velocity name="vright_joint_2" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_2" kv="80"/>
+            <velocity name="vright_joint_3" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_3" kv="80"/>
+            <velocity name="vright_joint_4" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_4" kv="50"/>
+            <velocity name="vright_joint_5" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_5" kv="50"/>
+            <velocity name="vright_joint_6" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_6" kv="40"/>
+        <!--    <velocity name="vright_gripper" ctrllimited="true" ctrlrange="-3.14159 3.14159" joint="right_joint_7"  kv="40"/>-->
+        <!--&lt;!&ndash;    <position name="plift_joint" joint="lift_joint" kp="400" ctrllimited="true" ctrlrange="0 1"/>&ndash;&gt;-->
+        <!--&lt;!&ndash;    <velocity name="vlift_joint"    ctrllimited="true" ctrlrange="-12000 12000" joint="lift_joint"        kv="90"/>&ndash;&gt;-->
+    </actuator>
+
+    <contact>
+      <exclude body1="base_link" body2="left_1"/>
+      <exclude body1="base_link" body2="right_1"/>
+<!--      <exclude body1="box" body2="floor"/>-->
+   </contact>
+
+<!--    <keyframe>-->
+<!--        <key qpos='-1.61564 -0.83953 -0.21204 0.03107 0.51382 -1.50792 0 0 0 0 0 0 0 0 -0.4 0.8 0.25 1 0 0 0 -0.46 0.58 0.4 1 0 0 0'/>-->
+<!--    </keyframe>-->
+</mujoco>

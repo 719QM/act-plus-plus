@@ -660,7 +660,7 @@ def render_func(args):
         print("空格键按下，退出遥控模式...")
         # np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
         # np.savetxt('target_action.txt', target_action, fmt='%f')
-        np.savetxt('dynamic_obstacle/3.txt', ee_pos, fmt='%f')
+        np.savetxt('CLAWAR/experiment/TAB/4.txt', ee_pos, fmt='%f')
 
         # # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")
         # save_qpos_to_txt(f"EEpos/20_3/teleoperation_qpos_{num_episode}.txt")

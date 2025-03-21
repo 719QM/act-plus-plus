@@ -1,20 +1,14 @@
-import time
 import numpy as np
 import collections
-import matplotlib.pyplot as plt
 import dm_env
-from pyquaternion import Quaternion
 import pyrealsense2 as rs
 import cv2
 from Robotic_Arm.rm_robot_interface import *
-from realman.constants import HAND_UNNORMALIZE, HAND_NORMALIZE
+from RM_real_constants import HAND_UNNORMALIZE, HAND_NORMALIZE
 from realman.robotic_arm_package.robotic_arm import *
 import pickle
 import argparse
-from einops import rearrange
 import torch
-from torchvision import transforms
-
 
 import IPython
 e = IPython.embed
@@ -302,7 +296,6 @@ def test_realenv():
         pipeline.stop()
 
 def load_policy(args):
-        from imitate_episodes_teleoperation import make_policy
         policy_config = {'lr': 1e-5,
                          'num_queries': args['chunk_size'],
                          'kl_weight': 10,
