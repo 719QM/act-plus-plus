@@ -81,6 +81,7 @@ teleoperation_trajectory = []
 weight_record = []
 policy_trajectory = []
 weighted_trajectory = []
+obstacle_record = []
 
 def compute_forward_kinematics(qpos):
     global left_eepos_policy, left_eequat_policy
@@ -99,7 +100,7 @@ def compute_forward_kinematics(qpos):
     left_eequat_policy = left_quat
     policy_trajectory.append(left_xpos)
 
-def sigmoid_weight(d, d0=0.33, k=10):
+def sigmoid_weight(d, d0=0.33, k=50):
     """
     计算基于距离 d 的轨迹权重，使用 Sigmoid 函数平滑过渡
 
@@ -474,7 +475,7 @@ class Teleoperation_Policy:
             # print(f"qpos_target: ", target_qpos)
 
     def handle_keyboard_input(self, window):
-        global timestep, ispolicy, ts, query_timestep, box_left_gripper_distance, isweight, weight_action
+        global timestep, ispolicy, ts, query_timestep, box_left_gripper_distance, isweight, weight_action, obstacle_record
         glfw_window = window._context.window  # 获取真实的 GLFW 窗口实例
         current_time = time.time()  # 获取当前时间戳
 
@@ -589,6 +590,8 @@ class Teleoperation_Policy:
                         # right_quat = Quaternion(env._physics.named.data.xquat['handforcesensor4'])
                         ee_pos.append(np.array(left_xpos))
                         # print("eepos last: ", ee_pos[-1])
+                        box_pos = env._physics.named.data.qpos['red_box_joint']
+                        obstacle_record.append(np.array(box_pos))
 
                         timestep = timestep + 1
                         print(timestep)
@@ -672,7 +675,7 @@ def save_qpos_to_txt(file_path):
 
 # 定义渲染函数
 def render_func(args):
-    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep, ee_pos
+    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep, ee_pos, obstacle_record
 
     # 只在首次调用时初始化 policy
     if policy is None:
@@ -712,17 +715,19 @@ def render_func(args):
         print("空格键按下，退出遥控模式...")
         # np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
         # np.savetxt('target_action.txt', target_action, fmt='%f')
-        np.savetxt('CLAWAR/experiment/k_10/4.txt', ee_pos, fmt='%f')
+        np.savetxt('CLAWAR/experiment/sudden_obstacle/TAB/4.txt', ee_pos, fmt='%f')
+
+        np.savetxt('CLAWAR/experiment/sudden_obstacle/TAB/4_obs.txt', obstacle_record, fmt='%f')
         # 保存与障碍距离数据至txt中
         # np.savetxt('CLAWAR/distance2.txt', obstacle_distance, fmt='%f')
         # # 保存teleoperation_trajectory至txt中
-        # np.savetxt('CLAWAR/teleoperation_trajectory.txt', teleoperation_trajectory, fmt='%f')
+        # np.savetxt('CLAWAR/experiment/shared_control_verify/teleoperation_trajectory.txt', teleoperation_trajectory, fmt='%f')
         # # 保存weight_record至txt中
         # np.savetxt('CLAWAR/weight_record.txt', weight_record, fmt='%f')
         # # 保存policy_trajectory至txt中
-        # np.savetxt('CLAWAR/policy_trajectory.txt', policy_trajectory, fmt='%f')
+        # np.savetxt('CLAWAR/experiment/shared_control_verify/policy_trajectory.txt', policy_trajectory, fmt='%f')
         # # 保存weighted_trajectory至txt中
-        # np.savetxt('CLAWAR/weighted_trajectory.txt', weighted_trajectory, fmt='%f')
+        # np.savetxt('CLAWAR/experiment/shared_control_verify/weighted_trajectory.txt', weighted_trajectory, fmt='%f')
 
 
         # # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")

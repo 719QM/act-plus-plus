@@ -284,7 +284,7 @@ def build_encoder(args):
 # ACT算法实现
 def build(args):
     # NOTE realman 的 state_dim = 16， aloha 的等于14
-    state_dim = 16 # TODO hardcode
+    state_dim = 14 # TODO hardcode
 
     # From state
     # backbone = None # from state for now, no need for conv nets

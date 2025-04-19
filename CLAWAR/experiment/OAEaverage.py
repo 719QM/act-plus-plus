@@ -30,7 +30,7 @@ def load_trajectory(file_path):
     return np.loadtxt(file_path)
 
 if __name__ == "__main__":
-    folder_path = "k_10"  # 轨迹文件夹路径
+    folder_path = "TAB"  # 轨迹文件夹路径
     sampling_frequency = 50  # 轨迹采集频率（Hz）
 
     # 障碍物信息（AABB）

@@ -860,7 +860,7 @@ class RMpaperEETask(base.Task):
         # refbody_id = physics.model.body('ref_body').id
         # print("refbody_id: ", refbody_id)
         # NOTE 如果是CLAWAR_experiment.py实验中需要有遥操作的参考位置，则将refpoint打开
-        np.copyto(physics.named.model.site_pos['ref_point'], physics.data.mocap_pos[0])
+        # np.copyto(physics.named.model.site_pos['ref_point'], physics.data.mocap_pos[0])
 
 
         # reset gripper control
@@ -887,13 +887,13 @@ class RMpaperEETask(base.Task):
         #NOTE evaluation时随机障碍与目标小球的位置 randomize box position
         # 调用函数 sample_box_pose()，该函数返回一个表示盒子新位置和姿态的数组 cube_pose。
         cube_pose = sample_box_pose_RM()
-        cube_pose = [-0.45, 0.75, 0.25, 1, 0, 0, 0]
+        # cube_pose = [-0.45, 0.75, 0.25, 1, 0, 0, 0]
 
         # 将新采样的盒子位置和姿态 (cube_pose) 复制到物理模拟的数据结构中。
         np.copyto(physics.named.data.qpos['red_box_joint'], cube_pose)
 
         ball_pose = sample_ball_pose_RM()
-        ball_pose = [-0.5, 0.4, 0.4, 1, 0, 0, 0]
+        # ball_pose = [-0.5, 0.4, 0.4, 1, 0, 0, 0]
         np.copyto(physics.named.data.qpos['ball_joint'], ball_pose)
         np.copyto(physics.named.model.site_pos['hook'], ball_pose[:3])
 

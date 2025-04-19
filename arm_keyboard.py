@@ -68,6 +68,7 @@ isinterpolated = False
 interpolated_trajectory = []
 target_qpos = []
 interpolate_time = 0
+obstacle_record = []
 
 def ik_test():
     # 目标参数
@@ -381,7 +382,7 @@ class Teleoperation_Policy:
             # print(f"qpos_target: ", target_qpos)
 
     def handle_keyboard_input(self, window):
-        global timestep, ispolicy, ts, query_timestep
+        global timestep, ispolicy, ts, query_timestep, obstacle_record
         glfw_window = window._context.window  # 获取真实的 GLFW 窗口实例
         current_time = time.time()  # 获取当前时间戳
 
@@ -492,6 +493,9 @@ class Teleoperation_Policy:
                         # right_quat = Quaternion(env._physics.named.data.xquat['handforcesensor4'])
                         ee_pos.append(np.array(left_xpos))
                         print("eepos last: ", ee_pos[-1])
+
+                        box_pos = env._physics.named.data.qpos['red_box_joint']
+                        obstacle_record.append(np.array(box_pos))
 
                         timestep = timestep + 1
                         print(timestep)
@@ -620,7 +624,7 @@ def save_qpos_to_txt(file_path):
 
 # 定义渲染函数
 def render_func(args):
-    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep, ee_pos
+    global camera_distance, camera_pitch, camera_yaw, ts, policy, episode, teleoperation_qpos, num_episode, timestep, ee_pos, obstacle_record
 
     # 只在首次调用时初始化 policy
     if policy is None:
@@ -660,7 +664,9 @@ def render_func(args):
         print("空格键按下，退出遥控模式...")
         # np.savetxt('pre_action.txt', pre_action, fmt='%f')  # 使用 '%f' 作为格式，表示浮点数
         # np.savetxt('target_action.txt', target_action, fmt='%f')
-        np.savetxt('CLAWAR/experiment/TAB/4.txt', ee_pos, fmt='%f')
+        np.savetxt('CLAWAR/experiment/sudden_obstacle/TAB/2.txt', ee_pos, fmt='%f')
+        # 保存障碍物位置
+        np.savetxt('CLAWAR/experiment/sudden_obstacle/TAB/2_obs.txt', obstacle_record, fmt='%f')
 
         # # save_qpos_to_txt(f"teleoperation_data/source_txt/teleoperation_qpos_{num_episode}.txt")
         # save_qpos_to_txt(f"EEpos/20_3/teleoperation_qpos_{num_episode}.txt")
