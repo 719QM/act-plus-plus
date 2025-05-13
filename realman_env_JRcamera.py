@@ -6,6 +6,7 @@ import dm_env
 from pyquaternion import Quaternion
 import pyrealsense2 as rs
 import cv2
+import h5py
 # from Robotic_Arm.rm_robot_interface import *
 from RM_real_constants import HAND_UNNORMALIZE, HAND_NORMALIZE
 from realman.robotic_arm_package.robotic_arm import *
@@ -16,6 +17,7 @@ from einops import rearrange
 import torch
 from torchvision import transforms
 import threading
+from threading import Barrier
 import queue
 from pynput import keyboard
 import os
@@ -45,16 +47,35 @@ isemergency = False
 
 # 全局变量
 position_queue = queue.Queue()  # 存储目标位置
+right_position_queue = queue.Queue()  # 存储右手目标位置
 stop_flag = threading.Event()  # 控制线程停止
-move_thread = None  # 机械臂线程，初始为空
+move_thread = None  # 左机械臂线程，初始为空
+right_move_thread = None  # 右机械臂线程，初始为空
+camera_thread = None  # 相机线程，初始为空
+read_thread = None  # 读取关节角线程，初始为空
+right_read_thread = None  # 读取右关节角线程，初始为空
+read_left_joint = None
+# read_right_joint = None
+read_right_joint = [0, 0, 0, 0, 0, 0, 0]
+read_lock = threading.Lock()
+
 
 query_frequency = 100
 
 # from ..constants import SIM_TASK_CONFIGS
 # camera_names = SIM_TASK_CONFIGS['sim_RM_simpletrajectory']['camera_names']
 camera_names = ['image_1', 'image_2']
+image_1_thread = None
+image_2_thread = None
+image_lock = threading.Lock()
 
-all_time_actions = torch.zeros([2000, 2000+100, 18]).cuda()
+
+key_press = None
+
+all_time_actions = torch.zeros([5000, 5000+100, 18]).cuda()
+
+barrier = Barrier(2)  # 两个线程同步点
+read_barrier = Barrier(2)  # 两个读取线程同步点
 
 class RealmanEnv:
     """
@@ -75,6 +96,13 @@ class RealmanEnv:
                         "images": {"cam": (480x640x3),        # h, w, c, dtype='uint8'
     """
     def __init__(self, level=3, mode=2):
+        # Initialize camera
+        self.cap = None
+        self.cap1 = None
+        self.init_JRcamera()
+        self.qpos_obs = []
+        # 等待一会儿
+        time.sleep(1)
         # 初始化机器人，初始化相机
         self.start_keyboard_listener()
         left_ip = "192.168.1.19"
@@ -88,40 +116,155 @@ class RealmanEnv:
         self.lefthand_init = [999, 999, 999, 999, 999, 999]
         self.righthand_init = [999, 999, 999, 999, 999, 999]
 
-        # Initialize camera
-        self.cap = None
-        self.cap1 = None
-        self.init_JRcamera()
-        self.qpos_obs = []
+
 
     # 机械臂运动线程
     def move_arm(self):
-        print("move_arm")
+        global key_press, move_thread, stop_flag
+        print("move_left_arm")
+        move_start_time = time.time()
+        move_last_time = move_start_time
         while not stop_flag.is_set():
-            try:
-                next_step_action = position_queue.get(timeout=0.1)
-                print("move arm next step: ", next_step_action)
-                if next_step_action is None:
-                    print("收到 None，等待新指令...")
+            barrier.wait()  # 等右手准备好
+            if key_press is not None:
+                if key_press.char.lower() == 's':  # 处理大小写
+                    if move_thread and move_thread.is_alive():
+                        self.emergency_stop()
+                        stop_flag.set()  # 触发停止标志
+                        print(f"stop_flag:{stop_flag}, 机械臂线程已停止")
+            if not stop_flag.is_set():
+                try:
+                    next_step_action = position_queue.get(timeout=0.1)
+                    # print("move arm next step: ", next_step_action)
+                    if next_step_action is None:
+                        print("收到 None，等待新指令...")
+                        pass
+                    else:
+                        state_len = int(len(next_step_action) / 2)
+                        next_step_larm = next_step_action[:state_len-1]
+                        next_step_rarm = next_step_action[state_len:-1]
+                        # print("next_step_action: ", next_step_action)
+
+                        self.left_arm.Movej_Cmd(next_step_larm, v=20, r=20, trajectory_connect=0, block=0)
+                        # self.right_arm.Movej_Cmd(next_step_rarm, v=1, r=0, trajectory_connect=0, block=0)
+
+
+                        # print("归一化手指：", next_step_action[7], next_step_action[15])
+
+                        # print("手指动作：", HAND_UNNORMALIZE(next_step_action[7]), HAND_UNNORMALIZE(next_step_action[15]))
+
+                        left_hand_angle = [int(a) for a in HAND_UNNORMALIZE(next_step_action[7])]
+                        right_hand_angle = [int(a) for a in HAND_UNNORMALIZE(next_step_action[15])]
+                        self.left_arm.Set_Hand_Angle(left_hand_angle, block=0)
+                        # self.right_arm.Set_Hand_Angle(right_hand_angle, block=0)
+
+                        move_now_time = time.time()
+                        print(f"Move Arm Time: {move_now_time - move_start_time:.2f}, Move Arm FPS: {1 / (move_now_time - move_last_time):.2f} \n")
+                        move_last_time = move_now_time
+                except queue.Empty:
                     pass
-                else:
-                    state_len = int(len(next_step_action) / 2)
-                    next_step_larm = next_step_action[:state_len-1]
-                    next_step_rarm = next_step_action[state_len:-1]
-                    print("next_step_action: ", next_step_action)
 
-                    self.left_arm.Movej_Cmd(next_step_larm, v=20, r=0, trajectory_connect=0, block=0)
-                    self.right_arm.Movej_Cmd(next_step_rarm, v=1, r=0, trajectory_connect=0, block=0)
-                    # print("归一化手指：", next_step_action[7], next_step_action[15])
+    # 机械臂右臂运动线程
+    def move_right_arm(self):
+        global key_press, right_move_thread, stop_flag
+        print("move right arm")
+        move_start_time = time.time()
+        move_last_time = move_start_time
+        while not stop_flag.is_set():
+            barrier.wait()  # 等左手准备好
+            if key_press is not None:
+                if key_press.char.lower() == 's':  # 处理大小写
+                    if right_move_thread and right_move_thread.is_alive():
+                        self.emergency_stop()
+                        stop_flag.set()  # 触发停止标志
+                        print(f"stop_flag:{stop_flag}, 机械臂线程已停止")
+            if not stop_flag.is_set():
+                try:
+                    next_step_action = right_position_queue.get(timeout=0.1)
+                    # print("move arm next step: ", next_step_action)
+                    if next_step_action is None:
+                        print("收到 None，等待新指令...")
+                        pass
+                    else:
+                        state_len = int(len(next_step_action) / 2)
+                        next_step_larm = next_step_action[:state_len-1]
+                        next_step_rarm = next_step_action[state_len:-1]
+                        # print("next_step_action: ", next_step_action)
 
-                    # print("手指动作：", HAND_UNNORMALIZE(next_step_action[7]), HAND_UNNORMALIZE(next_step_action[15]))
+                        # self.left_arm.Movej_Cmd(next_step_larm, v=1, r=0, trajectory_connect=0, block=0)
+                        self.right_arm.Movej_Cmd(next_step_rarm, v=20, r=20, trajectory_connect=0, block=0)
 
-                    left_hand_angle = [int(a) for a in HAND_UNNORMALIZE(next_step_action[7])]
-                    right_hand_angle = [int(a) for a in HAND_UNNORMALIZE(next_step_action[15])]
-                    self.left_arm.Set_Hand_Angle(left_hand_angle, block=0)
-                    self.right_arm.Set_Hand_Angle(right_hand_angle, block=0)
-            except queue.Empty:
-                pass
+
+                        # print("归一化手指：", next_step_action[7], next_step_action[15])
+
+                        # print("手指动作：", HAND_UNNORMALIZE(next_step_action[7]), HAND_UNNORMALIZE(next_step_action[15]))
+
+                        left_hand_angle = [int(a) for a in HAND_UNNORMALIZE(next_step_action[7])]
+                        right_hand_angle = [int(a) for a in HAND_UNNORMALIZE(next_step_action[15])]
+                        # self.left_arm.Set_Hand_Angle(left_hand_angle, block=0)
+                        self.right_arm.Set_Hand_Angle(right_hand_angle, block=0)
+
+                        move_now_time = time.time()
+                        print(f"Move Right Arm Time: {move_now_time - move_start_time:.2f}, Move Right Arm FPS: {1 / (move_now_time - move_last_time):.2f} \n")
+                        move_last_time = move_now_time
+                except queue.Empty:
+                    pass
+
+    def read_joint(self):
+        global read_left_joint, read_right_joint
+        read_start_time = time.time()
+        read_last_time = read_start_time
+        while not stop_flag.is_set():
+            read_barrier.wait()
+            try:
+                _, left_qpos = self.left_arm.Get_Joint_Degree()
+                # _, right_qpos = self.right_arm.Get_Joint_Degree()
+                with read_lock:
+                    read_left_joint = left_qpos
+                    # read_right_joint = right_qpos
+
+            except Exception as e:
+                print(f"Error reading joint angles: {e}")
+
+            read_now_time = time.time()
+            print(f"Read Joint Time: {read_now_time - read_start_time:.2f}, Read Joint FPS: {1 / (read_now_time - read_last_time):.2f} \n")
+            read_last_time = read_now_time
+
+    def right_read_joint(self):
+        global read_left_joint, read_right_joint
+        read_start_time = time.time()
+        read_last_time = read_start_time
+        while not stop_flag.is_set():
+            read_barrier.wait()
+            try:
+                # _, left_qpos = self.left_arm.Get_Joint_Degree()
+                _, right_qpos = self.right_arm.Get_Joint_Degree()
+                with read_lock:
+                    # read_left_joint = left_qpos
+                    read_right_joint = right_qpos
+
+            except Exception as e:
+                print(f"Error reading joint angles: {e}")
+
+            read_now_time = time.time()
+            print(f"Right Read Joint Time: {read_now_time - read_start_time:.2f}, Right Read Joint FPS: {1 / (read_now_time - read_last_time):.2f} \n")
+            read_last_time = read_now_time
+
+    def start_read_thread(self):
+        global read_thread
+        if read_thread is None or not read_thread.is_alive():
+            stop_flag.clear()
+            read_thread = threading.Thread(target=self.read_joint, daemon=True)
+            read_thread.start()
+            print("读取左臂关节角线程已启动")
+
+    def start_right_read_thread(self):
+        global right_read_thread
+        if right_read_thread is None or not right_read_thread.is_alive():
+            stop_flag.clear()
+            right_read_thread = threading.Thread(target=self.right_read_joint, daemon=True)
+            right_read_thread.start()
+            print("读取右臂关节角线程已启动")
 
     # 启动线程函数
     def start_thread(self):
@@ -134,6 +277,16 @@ class RealmanEnv:
 
             print("机械臂线程已启动")
 
+    def start_right_thread(self):
+        global right_move_thread
+        if right_move_thread is None or not right_move_thread.is_alive():  # 防止重复启动
+            stop_flag.clear()  # 复位停止标志
+            right_move_thread = threading.Thread(target=self.move_right_arm, daemon=True)  # 设置守护线程
+            right_move_thread.start()
+            print("right_move_thread is alive? ", right_move_thread.is_alive())
+
+            print("右机械臂线程已启动")
+
     # 停止线程函数
     def stop_thread(self):
         global move_thread
@@ -145,31 +298,71 @@ class RealmanEnv:
             print("机械臂线程已停止")
 
     def on_press(self, key):
-        global move_thread
+        global move_thread, key_press
         print(f"按下： {key}")
+        key_press = key
         print("move_thread is alive? ", move_thread.is_alive())
 
         if move_thread.is_alive():
-            print("机械臂线程已启动")
+            print("机械臂线程为启动状态")
 
-        try:
-            if key.char.lower() == 's':  # 处理大小写
-                if move_thread and move_thread.is_alive():
-                    self.emergency_stop()
-                    # position_queue.put(None)  # 发送退出信号
-                    move_thread.join()  # 等待线程结束
-                    move_thread = None  # 释放资源
-                    print("机械臂线程已停止")
-        except AttributeError:
-            pass  # 遇到 `Key` 对象（如 `space`）直接跳过
+        # try:
+        #     if key.char.lower() == 's':  # 处理大小写
+        #         if move_thread and move_thread.is_alive():
+        #             self.emergency_stop()
+        #             # position_queue.put(None)  # 发送退出信号
+        #             move_thread.join()  # 等待线程结束
+        #             move_thread = None  # 释放资源
+        #             print("机械臂线程已停止")
+        # except AttributeError:
+        #     pass  # 遇到 `Key` 对象（如 `space`）直接跳过
 
         if key == keyboard.Key.space:
             print("程序退出")
             if datarecord:
                 print("保存数据")
-                np.savetxt('realman/data_record/qpos_1.txt', qpos_record, fmt='%f')
-                np.savetxt('realman/data_record/policy_reference_1.txt', policy_reference_record, fmt='%f')
-                save_videos(image_record, 0.05, video_path='realman/data_record/video_1.mp4')
+                np.savetxt('realman/data_record/qpos_test_1.txt', qpos_record, fmt='%f')
+                np.savetxt('realman/data_record/policy_reference_test_1.txt', policy_reference_record, fmt='%f')
+                save_videos(image_record, 0.05, video_path='realman/data_record/video_test_1.mp4')
+
+                data_dict = {
+                    '/observations/qpos': [],
+                    '/observations/qvel': [],
+                    '/action': [],
+                }
+                for cam_name in camera_names:
+                    data_dict[f'/observations/images/{cam_name}'] = []
+
+                data_length = len(qpos_record)
+                action_array = np.stack(policy_reference_record)  # [T, 14]
+                qpos_array = np.stack(qpos_record)  # [T, 14]
+
+                # 图像转换，假设 image_1/image_2 每帧为 [480, 640, 3]
+                image_1_array = np.stack([frame['image_1'] for frame in image_record])  # [T, 480, 640, 3]
+                image_2_array = np.stack([frame['image_2'] for frame in image_record])  # [T, 480, 640, 3]
+
+                dataset_dir = 'realman/data_record'
+
+                dataset_path = os.path.join(dataset_dir, f'episode_v_20.hdf5')
+
+                with h5py.File(dataset_path, 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
+                    root.attrs['sim'] = False
+
+                    # 创建分组
+                    obs = root.create_group('observations')
+                    image_grp = obs.create_group('images')
+
+                    # 创建并写入图像数据集
+                    image_grp.create_dataset('image_1', data=image_1_array, chunks=(1, 480, 640, 3), dtype='uint8')
+                    image_grp.create_dataset('image_2', data=image_2_array, chunks=(1, 480, 640, 3), dtype='uint8')
+
+                    # 创建并写入状态和动作数据集
+                    obs.create_dataset('qpos', data=qpos_array)
+                    root.create_dataset('action', data=action_array)
+
+                print(f'✅ 保存完成，共 {data_length} 步，文件：{dataset_path}')
+
+
             os._exit(0)
 
     def start_keyboard_listener(self):
@@ -179,9 +372,39 @@ class RealmanEnv:
 
     def emergency_stop(self):
         print("急停触发！")
-        self.right_arm.Move_Stop_Cmd(block=True)
-        self.left_arm.Move_Stop_Cmd(block=True)
+        self.right_arm.Move_Stop_Cmd(block=False)
+        self.left_arm.Move_Stop_Cmd(block=False)
         stop_flag.set()  # 终止线程
+        print("急停命令已发送，线程已停止")
+
+    def get_JRimages_thread(self):
+        global image_1_thread, image_2_thread
+        image_start_time = time.time()
+        image_last_time = image_start_time
+        while not stop_flag.is_set():
+            # print("get JR images")
+            ret, frame = self.cap.read()
+            ret1, frame1 = self.cap1.read()
+            if ret and ret1:
+                with image_lock:
+                    # print("获取图像成功")
+                    image_1_thread = frame
+                    image_2_thread = frame1
+                    image_now_time = time.time()
+                    print(
+                        f"Get image Time: {image_now_time - image_start_time:.2f}, Get image FPS: {1 / (image_now_time - image_last_time):.2f} \n")
+                    image_last_time = image_now_time
+            else:
+                print("无法获取图像")
+            time.sleep(0.01)
+
+
+    def start_camera_thread(self):
+        global camera_thread
+        if camera_thread is None or not camera_thread.is_alive():
+            camera_thread = threading.Thread(target=self.get_JRimages_thread, daemon=True)
+            camera_thread.start()
+            print("相机线程启动")
 
 
     def init_JRcamera(self):
@@ -201,6 +424,7 @@ class RealmanEnv:
         self.cap1.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap1.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.cap1.set(cv2.CAP_PROP_FPS, 30)
+        self.start_camera_thread()
 
     def init_L515(self):
 
@@ -237,7 +461,7 @@ class RealmanEnv:
 
 
     def get_JRimages(self):
-        print("get JR images")
+        # print("get JR images")
         image_dict = dict()
         camera_names = ['image_1', 'image_2']
 
@@ -312,35 +536,47 @@ class RealmanEnv:
     def reset(self, v=1, r=0, connect=0, block=1):
         global move_thread, qpos_record, policy_reference_record
         print("reset robot")
-        # 重置机械臂
-        # leftarm_init = [-48.25076675415039,	81.26905059814453,	95.61441040039062,	-65.92607116699219,	-18.751447677612305,	50.00055694580078,	117.73294830322266]
-        # rightarm_init = [0.613353431224823,	86.6451416015625,	36.15856170654297,	70.44635009765625,	118.0,	-41.428016662597656,	-120.0,	180.0]
-        # lefthand_init = [999, 999, 999, 999, 999, 1]
-        # righthand_init = [999, 999, 999, 999, 999, 999]
 
         lefthand_init = [1]
         righthand_init = [1]
 
         self.start_thread()
-        print("机械臂线程已启动")
-        position_queue.put(self.leftarm_init + [HAND_NORMALIZE(self.lefthand_init)]
-                           + self.rightarm_init + [HAND_NORMALIZE(self.righthand_init)])
+        self.start_right_thread()
+        self.start_read_thread()
+        self.start_right_read_thread()
+        time.sleep(0.5)  # 等待线程启动
 
-        # self.left_arm.Movej_Cmd(leftarm_init, v, r, connect, block)
-        # self.right_arm.Movej_Cmd(rightarm_init, v, r, connect, block)
-        # self.left_arm.Set_Hand_Angle(self.lefthand_init, block)
-        # self.right_arm.Set_Hand_Angle(self.righthand_init, block)
+        print("机械臂线程已启动")
+        next_action = self.leftarm_init + [HAND_NORMALIZE(self.lefthand_init)] + self.rightarm_init + [HAND_NORMALIZE(self.righthand_init)]
+
+        position_queue.put(next_action)
+        right_position_queue.put(next_action)
 
         # 初始的qpos=leftarm_init+lefthand_init+rightarm_init+righthand_init
         qpos_init = np.concatenate((self.leftarm_init, [HAND_NORMALIZE(self.lefthand_init)],
                                     self.rightarm_init, [HAND_NORMALIZE(self.righthand_init)]))
         obs = collections.OrderedDict()
 
-        _, left_qpos = self.left_arm.Get_Joint_Degree()
-        _, right_qpos = self.right_arm.Get_Joint_Degree()
+        # Note 通过realman的API获取关节数据周期过长，直接改成开环
+        # _, left_qpos = self.left_arm.Get_Joint_Degree()
+        # _, right_qpos = self.right_arm.Get_Joint_Degree()
+        # self.qpos_obs = np.concatenate((left_qpos, [HAND_NORMALIZE(self.lefthand_init)],
+        #                            right_qpos, [HAND_NORMALIZE(self.righthand_init)]))
+        with read_lock:
+            left_qpos = read_left_joint
+            right_qpos = read_right_joint
         self.qpos_obs = np.concatenate((left_qpos, [HAND_NORMALIZE(self.lefthand_init)],
-                                   right_qpos, [HAND_NORMALIZE(self.righthand_init)]))
-        image_dict = self.get_JRimages()
+                                        right_qpos, [HAND_NORMALIZE(self.righthand_init)]))
+        # self.qpos_obs = next_action
+
+        image_dict = dict()
+        camera_names = ['image_1', 'image_2']
+
+        with image_lock:
+            image_dict['image_1'] = image_1_thread.copy() if image_1_thread is not None else None
+            image_dict['image_2'] = image_2_thread.copy() if image_2_thread is not None else None
+
+        # image_dict = self.get_JRimages()
         obs['qpos'] = self.qpos_obs
         obs['action'] = self.qpos_obs
         obs['images'] = dict()
@@ -397,21 +633,28 @@ class RealmanEnv:
 
         # next_step_action = left_qpos + [HAND_NORMALIZE(left_action[7])] + right_qpos + [HAND_NORMALIZE(right_action[7])]
         position_queue.put(action)
+        right_position_queue.put(action)
 
-        # left_movetag = self.left_arm.Movej_Cmd(left_qpos, v, r, connect, block)
-        # right_movetag = self.right_arm.Movej_Cmd(right_qpos, v, r, connect, block)
-        # left_handtag = self.left_arm.Set_Hand_Angle(HAND_UNNORMALIZE(left_action[7]), block)
-        # right_handtag = self.right_arm.Set_Hand_Angle(HAND_UNNORMALIZE(right_action[7]), block)
-
-        # print(f"left_arm: ", left_movetag, "right_arm: ", right_movetag,
-        #       "left_hand: ", left_handtag, "right_hand: ", right_handtag)
         obs = collections.OrderedDict()
-        _, left_qpos = self.left_arm.Get_Joint_Degree()
-        _, right_qpos = self.right_arm.Get_Joint_Degree()
+        # Note 通过realman的API获取关节数据周期过长，直接改成开环
+        # _, left_qpos = self.left_arm.Get_Joint_Degree()
+        # _, right_qpos = self.right_arm.Get_Joint_Degree()
+        # # print("读取关节角度：", left_qpos, right_qpos)
+        # self.qpos_obs = np.concatenate((left_qpos, [left_action[7]],
+        #                            right_qpos, [right_action[7]]))
+        with read_lock:
+            left_qpos = read_left_joint
+            right_qpos = read_right_joint
         # print("读取关节角度：", left_qpos, right_qpos)
-        self.qpos_obs = np.concatenate((left_qpos, [left_action[7]],
-                                   right_qpos, [right_action[7]]))
-        image_dict = self.get_JRimages()
+        self.qpos_obs = np.concatenate((left_qpos, [left_action[7]], right_qpos, [right_action[7]]))
+        # self.qpos_obs = action
+        image_dict = dict()
+        camera_names = ['image_1', 'image_2']
+        with image_lock:
+            image_dict['image_1'] = image_1_thread.copy() if image_1_thread is not None else None
+            image_dict['image_2'] = image_2_thread.copy() if image_2_thread is not None else None
+
+        # image_dict = self.get_JRimages()
         obs['qpos'] = self.qpos_obs
         obs['action'] = action
         obs['images'] = dict()
@@ -450,7 +693,7 @@ def test_realenv():
     # num_ts, num_dim = qpos.shape
     start_time = time.time()
     last_time = start_time
-    for t in range(100):
+    for t in range(2000):
         leftarm_init = [-13.04299259185791, 25.120895385742188, 141.19898986816406, -93.86701202392578,
                              11.084973335266113, -28.841115951538086, 102.23300170898438]
         rightarm_init = [34.81800079345703, 11.810999870300293, 70.34600067138672, 98.68399810791016,
@@ -480,6 +723,11 @@ def test_realenv():
         print(f"Time: {now_time - start_time:.2f}, FPS: {1 / (now_time - last_time):.2f}")
         last_time = now_time
         time.sleep(0.05)
+        print(f"timestep: {t} \n")
+
+    print("All timesteps have been run.")
+    # 手臂急停
+    env.emergency_stop()
 
     cv2.destroyAllWindows()
     # for pipeline in env.pipelines:
@@ -560,11 +808,12 @@ def query_policy(args):
         qpos_numpy = []
 
         query_frequency = 1
-        max_timesteps = 2000
+        max_timesteps = 20000
 
         # start_time = time.time()
         # last_time = start_time
-
+        start_time = time.time()
+        last_time = start_time
         for t in range(max_timesteps):
 
             if t == 0:
@@ -620,12 +869,19 @@ def query_policy(args):
                 target_qpos = action[:-2]
 
             ts = env.step(target_qpos)
-            print("policy target pos: ", target_qpos)
+            # print("policy target pos: ", target_qpos)
             episode.append(ts)
-            # now_time = time.time()
-            # print(f"Time: {now_time - start_time:.2f}, FPS: {1 / (now_time - last_time):.2f}")
-            # last_time = now_time
-            # print(f"Now is the {t} step")
+            now_time = time.time()
+            print(f"Time: {now_time - start_time:.2f}, FPS: {1 / (now_time - last_time):.2f}")
+            last_time = now_time
+            print(f"Now is the {t} step")
+            print("\n")
+            time.sleep(0.1)
+
+        # 输出英文已经跑完了所有的timesteps
+        print("All timesteps have been run.")
+        # 手臂急停
+        env.emergency_stop()
 
         # target_action.append(target_qpos)
         # print(f"qpos_target: ", target_qpos)
@@ -666,10 +922,10 @@ if __name__ == '__main__':
     parser.add_argument('--no_encoder', action='store_true')
 
 
-    # query_policy(vars(parser.parse_args()))
+    query_policy(vars(parser.parse_args()))
 
 
-    test_realenv()
+    # test_realenv()
 
 
 
