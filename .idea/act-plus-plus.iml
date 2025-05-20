@@ -10,7 +10,7 @@
       <excludeFolder url="file://$MODULE_DIR$/ckpt" />
       <excludeFolder url="file://$MODULE_DIR$/wandb" />
     </content>
-    <orderEntry type="jdk" jdkName="py39" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="dp3" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">
