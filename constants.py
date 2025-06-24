@@ -14,6 +14,13 @@ REALMAN_TASK_CONFIGS = {
         'episode_len': 603,
         'camera_names': ['image_1', 'image_2']
     },
+    'rmreal_pick_and_put':{
+        'dataset_dir': '/home/juyiii/ALOHA/act-plus-plus/collection/normalize_length',
+        'num_episodes': 40,
+        'episode_len': 258,
+        'camera_names': ['image_left', 'image_rgb']
+    },
+
 
 }
 SIM_TASK_CONFIGS = {

@@ -41,6 +41,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
     #     return sum(self.episode_len)
 
     def _locate_transition(self, index):
+        # 将一个全局帧索引 index 映射到对应的 episode 和该 episode 内的起始时间戳（帧编号）
+        episode_num = 0
         assert index < self.cumulative_len[-1]
         episode_index = np.argmax(self.cumulative_len > index) # argmax returns first True index
         start_ts = index - (self.cumulative_len[episode_index] - self.episode_len[episode_index])

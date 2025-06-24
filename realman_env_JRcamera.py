@@ -42,6 +42,7 @@ next_step_action = []
 qpos_record = []
 policy_reference_record = []
 image_record = []
+image_rgb = []
 # timestep_num = []
 
 isemergency = False
@@ -53,6 +54,7 @@ stop_flag = threading.Event()  # 控制线程停止
 move_thread = None  # 左机械臂线程，初始为空
 right_move_thread = None  # 右机械臂线程，初始为空
 camera_thread = None  # 相机线程，初始为空
+realsense_thread = None  # 相机线程，初始为空
 read_thread = None  # 读取关节角线程，初始为空
 right_read_thread = None  # 读取右关节角线程，初始为空
 left_hand_control_thread = None  # 左手控制线程，初始为空
@@ -67,10 +69,11 @@ query_frequency = 100
 
 # from ..constants import SIM_TASK_CONFIGS
 # camera_names = SIM_TASK_CONFIGS['sim_RM_simpletrajectory']['camera_names']
-camera_names = ['image_1', 'image_2']
+camera_names = ['image_left', 'image_rgb']
 image_1_thread = None
 image_2_thread = None
 image_lock = threading.Lock()
+realsense_image_lock = threading.Lock()
 
 
 key_press = None
@@ -80,6 +83,7 @@ all_time_actions = torch.zeros([5000, 5000+100, 18]).cuda()
 barrier = Barrier(2)  # 两个线程同步点
 read_barrier = Barrier(2)  # 两个读取线程同步点
 hand_barrier = Barrier(2)  # 两个手同步点
+
 
 class RealmanEnv:
     """
@@ -113,8 +117,14 @@ class RealmanEnv:
         right_ip = "192.168.1.18"
         self.left_arm = Arm(RM75, left_ip)
         self.right_arm = Arm(RM75, right_ip)
-        self.leftarm_init = [-13.04299259185791,	25.120895385742188,	141.19898986816406,	-93.86701202392578,	11.084973335266113,	-28.841115951538086,	102.23300170898438]
-        self.rightarm_init = [34.81800079345703,	11.810999870300293,	70.34600067138672,	98.68399810791016,	120.12000274658203,	-72.572998046875,	-51.494998931884766]
+        # [-33.96905314714275, 5.464392203361844, 157.56023018912228, -68.56710592523962,
+        #  -16.184800421533637, -62.98690352996998, 144.66762298526615, 1,
+        #  67.92400360107422, 15.260000228881836, 51.4379997253418, 100.64299774169922,
+        #  -63.284000396728516, 81.2040023803711, 74.48699951171875, 1]
+        self.leftarm_init = [-33.96905314714275, 5.464392203361844, 157.56023018912228, -68.56710592523962,
+         -16.184800421533637, -62.98690352996998, 144.66762298526615]
+        self.rightarm_init = [67.92400360107422, 15.260000228881836, 51.4379997253418, 100.64299774169922,
+         -63.284000396728516, 81.2040023803711, 74.48699951171875]
         # self.leftarm_init = [0, 0, 0, 0, 0, 0, 0]
         # self.rightarm_init = [0, 0, 0, 0, 0, 0, 0]
         self.lefthand_init = [999, 999, 999, 999, 999, 999]
@@ -123,6 +133,7 @@ class RealmanEnv:
         self.right_interpolator = SmoothInterpolator(dim=7, policy_freq=20, control_freq=100)
         self.left_point = []
         self.right_point = []
+        self.pipelines = {}
 
 
     # 机械臂运动线程
@@ -161,6 +172,8 @@ class RealmanEnv:
                 point = self.left_interpolator.get_next_point()
                 print(f"move left arm next step: {point}, hand: {last_action[7]}")
                 self.left_arm.Movej_CANFD(joint=point[:7], follow=False, expand=0)
+
+
                 # left_hand_angle = [int(a) for a in HAND_UNNORMALIZE(last_action[7])]
                 # self.left_arm.Set_Hand_Angle(left_hand_angle, block=0)
 
@@ -226,6 +239,8 @@ class RealmanEnv:
                 point = self.right_interpolator.get_next_point()
                 # print("move right arm next step: ", point)
                 self.right_arm.Movej_CANFD(joint=point[:7], follow=False, expand=0)
+
+
                 # right_hand_angle = [int(a) for a in HAND_UNNORMALIZE(last_action[15])]
                 # self.right_arm.Set_Hand_Angle(right_hand_angle, block=0)
 
@@ -434,9 +449,9 @@ class RealmanEnv:
             print("程序退出")
             if datarecord:
                 print("保存数据")
-                np.savetxt('realman/data_record/qpos_test_1.txt', qpos_record, fmt='%f')
-                np.savetxt('realman/data_record/policy_reference_test_1.txt', policy_reference_record, fmt='%f')
-                save_videos(image_record, 0.05, video_path='realman/data_record/video_test_1.mp4')
+                np.savetxt('collection/qpos.txt', qpos_record, fmt='%f')
+                np.savetxt('collection/policy_reference.txt', policy_reference_record, fmt='%f')
+                save_videos(image_record, 0.05, video_path='collection/video.mp4')
 
                 data_dict = {
                     '/observations/qpos': [],
@@ -450,13 +465,14 @@ class RealmanEnv:
                 action_array = np.stack(policy_reference_record)  # [T, 14]
                 qpos_array = np.stack(qpos_record)  # [T, 14]
 
-                # 图像转换，假设 image_1/image_2 每帧为 [480, 640, 3]
-                image_1_array = np.stack([frame['image_1'] for frame in image_record])  # [T, 480, 640, 3]
-                image_2_array = np.stack([frame['image_2'] for frame in image_record])  # [T, 480, 640, 3]
+                # 图像转换，假设 image_1/image_right 每帧为 [480, 640, 3]
+                image_1_array = np.stack([frame['image_left'] for frame in image_record])  # [T, 480, 640, 3]
+                image_2_array = np.stack([frame['image_right'] for frame in image_record])  # [T, 480, 640, 3]
+                image_3_array = np.stack([frame['image_rgb'] for frame in image_record])  # [T, 480, 640, 3]
 
-                dataset_dir = 'realman/data_record'
+                dataset_dir = 'collection'
 
-                dataset_path = os.path.join(dataset_dir, f'episode_v_20.hdf5')
+                dataset_path = os.path.join(dataset_dir, f'episode.hdf5')
 
                 with h5py.File(dataset_path, 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
                     root.attrs['sim'] = False
@@ -466,8 +482,9 @@ class RealmanEnv:
                     image_grp = obs.create_group('images')
 
                     # 创建并写入图像数据集
-                    image_grp.create_dataset('image_1', data=image_1_array, chunks=(1, 480, 640, 3), dtype='uint8')
-                    image_grp.create_dataset('image_2', data=image_2_array, chunks=(1, 480, 640, 3), dtype='uint8')
+                    image_grp.create_dataset('image_left', data=image_1_array, chunks=(1, 480, 640, 3), dtype='uint8')
+                    image_grp.create_dataset('image_right', data=image_2_array, chunks=(1, 480, 640, 3), dtype='uint8')
+                    image_grp.create_dataset('image_rgb', data=image_3_array, chunks=(1, 480, 640, 3), dtype='uint8')
 
                     # 创建并写入状态和动作数据集
                     obs.create_dataset('qpos', data=qpos_array)
@@ -539,59 +556,20 @@ class RealmanEnv:
         self.cap1.set(cv2.CAP_PROP_FPS, 30)
         self.start_camera_thread()
 
-    def init_L515(self):
-
-        # # Get device product line for setting a supporting resolution
-        # pipeline_wrapper = rs.pipeline_wrapper(pipeline)
-        # pipeline_profile = config.resolve(pipeline_wrapper)
-        context = rs.context()
-        devices = []
-        for device in context.devices:
-            if device.get_info(rs.camera_info.name):
-                devices.append(device.get_info(rs.camera_info.serial_number))
-        print(f"Connected devices: {devices}")
-
-        for serial in devices:
-            pipeline = rs.pipeline()
-            config = rs.config()
-            config.enable_device(serial)
-            if serial == self.camera_serial_100:
-                config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
-                print(serial)
-            if serial == self.camera_serial_110:
-                config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-                print(serial)
-
-            pipeline.start(config)
-
-            self.pipelines[serial] = pipeline
-            # self.pipelines.append(pipeline)
-
-        # device = pipeline_profile.get_device()
-        # device_product_line = str(device.get_info(rs.camera_info.product_line))
-        # config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-        # self.pipeline.start(config)
-
-
     def get_JRimages(self):
         # print("get JR images")
         image_dict = dict()
-        camera_names = ['image_1', 'image_2']
+        camera_names = ['image_left', 'image_right']
 
         ret, frame = self.cap.read()
         ret1, frame1 = self.cap1.read()
         if ret:
-            image_dict['image_1'] = frame  # 直接存入 numpy 数组
-            image_dict['image_2'] = frame1
+            image_dict['image_left'] = frame  # 直接存入 numpy 数组
+            image_dict['image_right'] = frame1
         else:
             print("无法获取图像")
 
         return image_dict
-
-
-    def release_camera(self):
-        self.cap.release()
-        cv2.destroyAllWindows()
 
     def get_images(self):
         print(f"enter get_images")
@@ -619,6 +597,63 @@ class RealmanEnv:
         # color_image = np.asanyarray(color_frame.get_data())
         return image_dict
 
+    def init_L515(self):
+        context = rs.context()
+        devices = []
+        for device in context.devices:
+            if device.get_info(rs.camera_info.name):
+                devices.append(device.get_info(rs.camera_info.serial_number))
+        print(f"Connected devices: {devices}")
+
+        for serial in devices:
+            pipeline = rs.pipeline()
+            config = rs.config()
+            config.enable_device(serial)
+            config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            print(serial)
+
+            # if serial == self.camera_serial_100:
+            #     config.enable_stream(rs.stream.color, 1280, 720, rs.format.bgr8, 30)
+            #     print(serial)
+            # if serial == self.camera_serial_110:
+            #     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+            #     print(serial)
+
+            pipeline.start(config)
+
+            self.pipelines[serial] = pipeline
+
+    def get_realsense_image(self):
+        global image_rgb
+        print(f"enter get_images")
+        image_start_time = time.time()
+        image_last_time = image_start_time
+        image_dict = dict()
+        # camera_names = ['image_110', 'image_100']
+
+        while not stop_flag.is_set():
+            pipeline = list(self.pipelines.values())[0]
+            frames = pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            color_image = np.asanyarray(color_frame.get_data())
+            with realsense_image_lock:
+                image_rgb = color_image
+
+            image_now_time = time.time()
+            # with self.fps_lock:
+            #     self.fps_dict["Realsense FPS:"] = f"{1 / (image_now_time - image_last_time):.2f} FPS"
+            # print(f"Get Image Time: {image_now_time - image_start_time:.2f}, Get Image FPS: {1 / (image_now_time - image_last_time):.2f} \n")
+            image_last_time = image_now_time
+
+    def start_realsense(self):
+        global realsense_thread
+        if realsense_thread is None or not realsense_thread.is_alive():
+            stop_flag.clear()
+            realsense_thread = threading.Thread(target=self.get_realsense_image, daemon=True)
+            realsense_thread.start()
+            print("realsense_thread is alive? ", realsense_thread.is_alive())
+            print("realsense相机线程已启动")
+
     def get_qpos(self):
         """
         Get joint positions.
@@ -635,23 +670,17 @@ class RealmanEnv:
             return None
         return qpos
 
-    # NOTE 多半没法这么用，机械臂读取数据周期很长
-    def get_observation(self):
-        obs = collections.OrderedDict()
-        _, left_joint = self.left_arm.Get_Joint_Degree()
-        _, right_joint = self.right_arm.Get_Joint_Degree()
-
-        obs['qpos'] = self.qpos_obs
-        # obs['qvel'] = self.get_qvel()
-        obs['images'] = self.get_JRimages()
-        return obs
 
     def reset(self, v=1, r=0, connect=0, block=1):
-        global move_thread, qpos_record, policy_reference_record
+        global move_thread, qpos_record, policy_reference_record, realsense_image_lock
         print("reset robot")
 
         lefthand_init = [1]
         righthand_init = [1]
+        self.init_L515()
+        self.start_realsense()
+        time.sleep(0.5)
+        print("realsense相机线程已启动")
 
         self.start_read_thread()
         self.start_right_read_thread()
@@ -686,16 +715,19 @@ class RealmanEnv:
         with read_lock:
             left_qpos = read_left_joint
             right_qpos = read_right_joint
+
         self.qpos_obs = np.concatenate((left_qpos, [HAND_NORMALIZE(self.lefthand_init)],
                                         right_qpos, [HAND_NORMALIZE(self.righthand_init)]))
         # self.qpos_obs = next_action
 
         image_dict = dict()
-        camera_names = ['image_1', 'image_2']
+        camera_names = ['image_left', 'image_right']
 
         with image_lock:
-            image_dict['image_1'] = image_1_thread.copy() if image_1_thread is not None else None
-            image_dict['image_2'] = image_2_thread.copy() if image_2_thread is not None else None
+            image_dict['image_left'] = image_1_thread.copy() if image_1_thread is not None else None
+            image_dict['image_right'] = image_2_thread.copy() if image_2_thread is not None else None
+        with realsense_image_lock:
+            image_dict['image_rgb'] = image_rgb.copy() if image_rgb is not None else None
 
         # image_dict = self.get_JRimages()
         obs['qpos'] = self.qpos_obs
@@ -703,9 +735,10 @@ class RealmanEnv:
         obs['images'] = dict()
         # 确保获取的图像有效
         if image_dict is not None:
-            obs['images']['image_1'] = image_dict['image_1']  # NumPy 格式
-            obs['images']['image_2'] = image_dict['image_2']
-            print("图像类型", type(obs['images']['image_1']))
+            obs['images']['image_left'] = image_dict['image_left']  # NumPy 格式
+            obs['images']['image_right'] = image_dict['image_right']
+            obs['images']['image_rgb'] = image_dict['image_rgb']
+            print("图像类型", type(obs['images']['image_left']))
         else:
             print("图像数据为空，obs['images'] 未填充")
         return dm_env.TimeStep(
@@ -716,41 +749,21 @@ class RealmanEnv:
 
     # 输入的action是7+1+7+1的关节，前一半是left，后一半是right
     def step(self, action, v=1, r=0, connect=0, block=1):
-        global qpos_record, policy_reference_record, image_record
-        """
-        关节空间运动
-
-        Args:
-            joint (list): 各关节目标角度数组，单位：°
-            v (int): 速度百分比系数，1~100
-            r (int, optional): 交融半径百分比系数，0~100。
-            connect (int): 轨迹连接标志
-                - 0：立即规划并执行轨迹，不与后续轨迹连接。
-                - 1：将当前轨迹与下一条轨迹一起规划，但不立即执行。阻塞模式下，即使发送成功也会立即返回。
-            block (int): 阻塞设置
-                - 多线程模式：
-                    - 0：非阻塞模式，发送指令后立即返回。
-                    - 1：阻塞模式，等待机械臂到达目标位置或规划失败后才返回。
-                - 单线程模式：
-                    - 0：非阻塞模式。
-                    - 其他值：阻塞模式并设置超时时间，单位为秒。
-
-        Returns:
-            int: 函数执行的状态码。
-            - 0: 成功。
-            - 1: 控制器返回false，参数错误或机械臂状态发生错误。
-            - -1: 数据发送失败，通信过程中出现问题。
-            - -2: 数据接收失败，通信过程中出现问题或者控制器长久没有返回。
-            - -3: 返回值解析失败，接收到的数据格式不正确或不完整。
-            - -4: 当前到位设备校验失败，即当前到位设备不为关节。
-            - -5: 单线程模式超时未接收到返回，请确保超时时间设置合理。
-        """
+        global qpos_record, policy_reference_record, image_record, realsense_image_lock
         state_len = int(len(action) / 2)
         left_action = action[:state_len]
         right_action = action[state_len:]
 
-        left_qpos = left_action[:7]
-        right_qpos = right_action[:7]
+        # # 手指是每个 action 的第 8 个值（索引 7）
+        # left_hand_value = left_action[7]
+        # right_hand_value = right_action[7]
+        #
+        # # 二值化处理：手指动作设为 0 或 1（例如 > 0 为闭合）
+        # left_action[7] = 1.0 if left_hand_value > 0.5 else 0.0
+        # right_action[7] = 1.0 if right_hand_value > 0.5 else 0.0
+        #
+        # action[7] = left_action[7]
+        # action[15] = right_action[7]
 
         # next_step_action = left_qpos + [HAND_NORMALIZE(left_action[7])] + right_qpos + [HAND_NORMALIZE(right_action[7])]
         position_queue.put(action)
@@ -770,18 +783,21 @@ class RealmanEnv:
         self.qpos_obs = np.concatenate((left_qpos, [left_action[7]], right_qpos, [right_action[7]]))
         # self.qpos_obs = action
         image_dict = dict()
-        camera_names = ['image_1', 'image_2']
+        camera_names = ['image_left', 'image_right']
         with image_lock:
-            image_dict['image_1'] = image_1_thread.copy() if image_1_thread is not None else None
-            image_dict['image_2'] = image_2_thread.copy() if image_2_thread is not None else None
+            image_dict['image_left'] = image_1_thread.copy() if image_1_thread is not None else None
+            image_dict['image_right'] = image_2_thread.copy() if image_2_thread is not None else None
+        with realsense_image_lock:
+            image_dict['image_rgb'] = image_rgb.copy() if image_rgb is not None else None
 
         # image_dict = self.get_JRimages()
         # obs['qpos'] = self.qpos_obs
         obs['qpos'] = action
         obs['action'] = action
         obs['images'] = dict()
-        obs['images']['image_1'] = image_dict['image_1']
-        obs['images']['image_2'] = image_dict['image_2']
+        obs['images']['image_left'] = image_dict['image_left']
+        obs['images']['image_right'] = image_dict['image_right']
+        obs['images']['image_rgb'] = image_dict['image_rgb']
 
         if datarecord:
 
@@ -804,7 +820,7 @@ def make_rm_real_env():
 
 
 def test_realenv():
-    render_cams = ['image_1']  # Camera names
+    render_cams = ['image_left']  # Camera names
     env = make_rm_real_env()
     ts = env.reset()
     episode = [ts]
@@ -816,22 +832,23 @@ def test_realenv():
     start_time = time.time()
     last_time = start_time
     for t in range(2000):
-        leftarm_init = [-13.04299259185791, 25.120895385742188, 141.19898986816406, -93.86701202392578,
-                             11.084973335266113, -28.841115951538086, 102.23300170898438]
-        rightarm_init = [34.81800079345703, 11.810999870300293, 70.34600067138672, 98.68399810791016,
-                              120.12000274658203, -72.572998046875, -51.494998931884766]
+        # leftarm_init = [-13.04299259185791, 25.120895385742188, 141.19898986816406, -93.86701202392578,
+        #                      11.084973335266113, -28.841115951538086, 102.23300170898438]
+        # rightarm_init = [34.81800079345703, 11.810999870300293, 70.34600067138672, 98.68399810791016,
+        #                       120.12000274658203, -72.572998046875, -51.494998931884766]
 
-        action = [-13.04299259185791, 25.120895385742188, 141.19898986816406, -93.86701202392578,
-                             11.084973335266113, -28.841115951538086, 102.23300170898438, 1, 34.81800079345703, 11.810999870300293, 70.34600067138672, 98.68399810791016,
-                              120.12000274658203, -72.572998046875, -51.494998931884766, 1]
+        action = [-33.96905314714275,	5.464392203361844,	157.56023018912228,	-68.56710592523962,
+                  -16.184800421533637,	-62.98690352996998,	144.66762298526615, 1,
+                  67.92400360107422, 15.260000228881836, 51.4379997253418,	100.64299774169922,
+                  -63.284000396728516,	81.2040023803711,	74.48699951171875, 1]
 
 
         # action = qpos[t, :]
 
         ts = env.step(action)
         episode.append(ts)
-        image = ts.observation['images']['image_1']
-        # cv2.imshow('image_1', image)
+        image = ts.observation['images']['image_left']
+        # cv2.imshow('image_left', image)
 
         # images = [ts.observation['images'][cam] for cam in render_cams]
         # # Combine images horizontally or vertically
@@ -921,6 +938,7 @@ def get_curr_image(ts, camera_names, rand_crop_resize=False):
 
 def query_policy(args):
         # global target_qpos, query_timestep, all_actions, ts, interpolated_trajectory, isinterpolated, interpolate_time
+        global all_actions
 
         env = make_rm_real_env()
         ts = env.reset()
@@ -998,7 +1016,7 @@ def query_policy(args):
             last_time = now_time
             print(f"Now is the {t} step")
             print("\n")
-            time.sleep(0.01)
+            time.sleep(0.05)
 
         # 输出英文已经跑完了所有的timesteps
         print("All timesteps have been run.")

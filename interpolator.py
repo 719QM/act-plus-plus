@@ -6,7 +6,7 @@ from queue import Queue
 
 
 class SmoothInterpolator:
-    def __init__(self, dim=7, policy_freq=20, control_freq=100, v_max=50.0, a_max=None):
+    def __init__(self, dim=7, policy_freq=20, control_freq=100, v_max=10.0, a_max=None):
         self.dim = dim
         self.control_freq = control_freq
         self.v_max = np.ones(dim) * v_max  # max velocity per joint (deg/s)

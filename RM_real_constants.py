@@ -7,7 +7,7 @@ import numpy as np
 # OPEN:1 CLOSED:0
 # HAND_OPEN = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 HAND_OPEN = np.array([999, 999, 999, 999, 999, 999])
-HAND_CLOSED = np.array([600.0,	600.0,	600.0,	600.0,	999.0,	1.0])
+HAND_CLOSED = np.array([400.0,	400.0,	400.0,	400.0,	999.0,	1.0])
 # SHADOW_HAND_UNNORMALIZE = lambda x: x * (HAND_OPEN - HAND_CLOSED) + HAND_CLOSED
 # HAND_UNNORMALIZE = lambda x: [(open_val - closed_val) * x + closed_val
 #                                      for open_val, closed_val

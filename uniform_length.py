@@ -58,10 +58,10 @@ def adjust_hdf5_data(input_file, output_file, target_length=90):
 
 
 # max_episode = 38
-# for i in range(90, 124):
-#     input_hdf5 = f"/home/juyiii/data/aloha/sim_RM_teleoperation/episode_{i}.hdf5"
-#     output_hdf5 = f"/home/juyiii/data/aloha/sim_RM_Astar_teleoperation_adjusted/episode_{i}.hdf5"
-#     adjust_hdf5_data(input_hdf5, output_hdf5, target_length=1000)
-input_hdf5 = "/home/juyiii/ALOHA/act-plus-plus/EEpos/20/episode_20.hdf5"
-output_hdf5 = "/home/juyiii/ALOHA/act-plus-plus/EEpos/20/episode_adjusted_20.hdf5"
-adjust_hdf5_data(input_hdf5, output_hdf5, target_length=1000)
+for i in range(40):
+    input_hdf5 = f"/home/juyiii/ALOHA/act-plus-plus/collection/episode_{i}.hdf5"
+    output_hdf5 = f"/home/juyiii/ALOHA/act-plus-plus/collection/normalize_length/episode_{i}.hdf5"
+    adjust_hdf5_data(input_hdf5, output_hdf5, target_length=258)
+# input_hdf5 = "/home/juyiii/ALOHA/act-plus-plus/EEpos/20/episode_20.hdf5"
+# output_hdf5 = "/home/juyiii/ALOHA/act-plus-plus/EEpos/20/episode_adjusted_20.hdf5"
+# adjust_hdf5_data(input_hdf5, output_hdf5, target_length=1000)
