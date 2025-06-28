@@ -8,6 +8,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
+from .transformer_PC import build_transformer_PC, TransformerEncoder_PC, TransformerEncoderLayer_PC
+from .pointnet import build_pointcloud_encoder
 
 import numpy as np
 
@@ -194,6 +196,186 @@ class DETRVAE(nn.Module):
         return a_hat, is_pad_hat, [mu, logvar], probs, binaries
 
 
+class DETRVAE_PC(nn.Module):
+    """ This is the DETR module that performs object detection """
+
+    def __init__(self, backbones, pointcloud_encoder, transformer, encoder, state_dim, num_queries, camera_names, vq, vq_class, vq_dim,
+                 action_dim):
+        """ Initializes the model.
+        Parameters:
+            backbones: torch module of the backbone to be used. See backbone.py
+            pointcloud_encoder: torch module of the point cloud encoder. See pointnet.py
+            transformer: torch module of the transformer architecture. See transformer_PC.py
+            state_dim: robot state dimension of the environment
+            num_queries: number of object queries, ie detection slot. This is the maximal number of objects
+                         DETR can detect in a single image. For COCO, we recommend 100 queries.
+            aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
+        """
+        super().__init__()  # 调用父类的构造方法
+        self.num_queries = num_queries
+        self.camera_names = camera_names
+        self.transformer = transformer
+        self.pointcloud_encoder = pointcloud_encoder
+        self.encoder = encoder
+        self.vq, self.vq_class, self.vq_dim = vq, vq_class, vq_dim
+        self.state_dim, self.action_dim = state_dim, action_dim
+        hidden_dim = transformer.d_model
+        # print(hidden_dim, action_dim)
+        self.action_head = nn.Linear(hidden_dim, action_dim)
+        self.is_pad_head = nn.Linear(hidden_dim, 1)
+        self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        if backbones is not None:
+            self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
+            self.backbones = nn.ModuleList(backbones)
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+            self.input_proj_object_pose = nn.Linear(12, hidden_dim)
+        else:
+            # input_dim = 14 + 7 # robot_state + env_state
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+            self.input_proj_object_pose = nn.Linear(12, hidden_dim)
+            self.input_proj_env_state = nn.Linear(7, hidden_dim)
+            self.pos = torch.nn.Embedding(2, hidden_dim)
+            self.backbones = None
+
+        # encoder extra parameters
+        self.latent_dim = 32  # final size of latent z # TODO tune
+        self.cls_embed = nn.Embedding(1, hidden_dim)  # extra cls token embedding
+        self.encoder_action_proj = nn.Linear(action_dim, hidden_dim)  # project action to embedding
+        self.encoder_joint_proj = nn.Linear(state_dim, hidden_dim)  # project qpos to embedding
+
+        print(f'Use VQ: {self.vq}, {self.vq_class}, {self.vq_dim}')
+        if self.vq:
+            self.latent_proj = nn.Linear(hidden_dim, self.vq_class * self.vq_dim)
+        else:
+            self.latent_proj = nn.Linear(hidden_dim, self.latent_dim * 2)  # project hidden state to latent std, var
+        self.register_buffer('pos_table',
+                             get_sinusoid_encoding_table(1 + 1 + num_queries, hidden_dim))  # [CLS], qpos, a_seq
+
+        # decoder extra parameters
+        if self.vq:
+            self.latent_out_proj = nn.Linear(self.vq_class * self.vq_dim, hidden_dim)
+        else:
+            self.latent_out_proj = nn.Linear(self.latent_dim, hidden_dim)  # project latent sample to embedding
+        self.additional_pos_embed = nn.Embedding(4, hidden_dim)  # learned position embedding for proprio and latent
+
+    def encode(self, qpos, actions=None, is_pad=None, vq_sample=None):
+        bs, _ = qpos.shape
+        # At test time, we set z to be the mean of the prior distribution i.e. zero to deterministically decode.
+        if self.encoder is None:
+            latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
+            latent_input = self.latent_out_proj(latent_sample)
+            probs = binaries = mu = logvar = None
+        else:
+            # cvae encoder
+            is_training = actions is not None  # train or val 有action时是训练，无action是评估
+            ### Obtain latent z from action sequence
+            if is_training:
+                # project action sequence to embedding dim, and concat with a CLS token
+                # print(f"action shape: {actions.shape}")
+                action_embed = self.encoder_action_proj(actions)  # (bs, seq, hidden_dim)
+                qpos_embed = self.encoder_joint_proj(qpos)  # (bs, hidden_dim)
+                qpos_embed = torch.unsqueeze(qpos_embed, axis=1)  # (bs, 1, hidden_dim)
+                cls_embed = self.cls_embed.weight  # (1, hidden_dim)
+                cls_embed = torch.unsqueeze(cls_embed, axis=0).repeat(bs, 1, 1)  # (bs, 1, hidden_dim)
+                # encoder的输入 将CLS标记、关节位置嵌入和动作嵌入按序列连接起来，形成编码器的输入
+                # print(f"cls_embed shape: {cls_embed.shape}, qpos_embed shape:{qpos_embed.shape}, action_embed shape: {action_embed.shape}")
+                encoder_input = torch.cat([cls_embed, qpos_embed, action_embed], axis=1)  # (bs, seq+1, hidden_dim)
+                encoder_input = encoder_input.permute(1, 0, 2)  # (seq+1, bs, hidden_dim)
+                # do not mask cls token
+                cls_joint_is_pad = torch.full((bs, 2), False).to(qpos.device)  # False: not a padding
+                is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
+                # obtain position embedding
+                pos_embed = self.pos_table.clone().detach()
+                pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
+                # query model
+                # 基于transformer的表征
+                # print(f"pos_embed shape: {pos_embed.shape}")
+                encoder_output = self.encoder(encoder_input, pos=pos_embed, src_key_padding_mask=is_pad)
+                encoder_output = encoder_output[0]  # take cls output only
+                # 输出结果
+                latent_info = self.latent_proj(encoder_output)
+
+                if self.vq:
+                    logits = latent_info.reshape([*latent_info.shape[:-1], self.vq_class, self.vq_dim])
+                    probs = torch.softmax(logits, dim=-1)
+                    binaries = F.one_hot(torch.multinomial(probs.view(-1, self.vq_dim), 1).squeeze(-1),
+                                         self.vq_dim).view(-1, self.vq_class, self.vq_dim).float()
+                    binaries_flat = binaries.view(-1, self.vq_class * self.vq_dim)
+                    probs_flat = probs.view(-1, self.vq_class * self.vq_dim)
+                    straigt_through = binaries_flat - probs_flat.detach() + probs_flat
+                    latent_input = self.latent_out_proj(straigt_through)
+                    mu = logvar = None
+                else:
+                    probs = binaries = None
+                    mu = latent_info[:, :self.latent_dim]
+                    logvar = latent_info[:, self.latent_dim:]
+                    latent_sample = reparametrize(mu, logvar)
+                    latent_input = self.latent_out_proj(latent_sample)
+
+            else:
+                mu = logvar = binaries = probs = None
+                if self.vq:
+                    latent_input = self.latent_out_proj(vq_sample.view(-1, self.vq_class * self.vq_dim))
+                else:
+                    latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(qpos.device)
+                    latent_input = self.latent_out_proj(latent_sample)
+
+        return latent_input, probs, binaries, mu, logvar
+
+    def forward(self, qpos, image, env_state, object_pose, pointcloud=None, actions=None, is_pad=None, vq_sample=None):
+        """
+        qpos: batch, qpos_dim
+        image: batch, num_cam, channel, height, width
+        env_state: None
+        object_pose: batch, 12
+        pointcloud: batch, num_points, 3/6
+        actions: batch, seq, action_dim
+        """
+        # print(f"action shape: {actions.shape}")
+        latent_input, probs, binaries, mu, logvar = self.encode(qpos, actions, is_pad, vq_sample)
+
+        # cvae decoder
+        if self.backbones is not None:
+            # Image observation features and position embeddings
+            all_cam_features = []
+            all_cam_pos = []
+            for cam_id, cam_name in enumerate(self.camera_names):
+                # 对每个相机的图像数据进行处理，得到特征和位置信息。
+                features, pos = self.backbones[cam_id](image[:, cam_id])
+                features = features[0]  # take the last layer feature, NCHW
+                pos = pos[0]
+                all_cam_features.append(self.input_proj(features))
+                all_cam_pos.append(pos)
+            # proprioception features
+            proprio_input = self.input_proj_robot_state(qpos)
+            proprio_object_pose = self.input_proj_object_pose(object_pose)
+
+            # print(self.pointcloud_encoder, pointcloud)
+            # 1. 提取点云特征
+            if self.pointcloud_encoder is not None and pointcloud is not None:
+                # print("提取点云特征")
+                pc_feat = self.pointcloud_encoder(pointcloud)  # [B, hidden_dim]
+            #     print pc_feat的shape
+            #     print(f"pc_feat shape: {pc_feat.shape}, proprio_input shape: {proprio_input.shape}")
+            else:
+                pc_feat = torch.zeros_like(proprio_input)  # fallback
+
+            # fold camera dimension into width dimension, NCHW
+            src = torch.cat(all_cam_features, axis=3)
+            pos = torch.cat(all_cam_pos, axis=3)
+            # 使用Transformer模型对拼接后的特征进行处理。
+            hs = self.transformer(src, None, self.query_embed.weight, pos, pc_feat, latent_input, proprio_input,
+                                  proprio_object_pose, self.additional_pos_embed.weight)[0]
+        else:
+            qpos = self.input_proj_robot_state(qpos)
+            object_pose = self.input_proj_object_pose(object_pose)
+            env_state = self.input_proj_env_state(env_state)
+            transformer_input = torch.cat([qpos, env_state], axis=1)  # seq length = 2
+            hs = self.transformer(transformer_input, None, self.query_embed.weight, self.pos.weight)[0]
+        a_hat = self.action_head(hs)
+        is_pad_hat = self.is_pad_head(hs)
+        return a_hat, is_pad_hat, [mu, logvar], probs, binaries
+
 
 class CNNMLP(nn.Module):
     def __init__(self, backbones, state_dim, camera_names):
@@ -308,6 +490,57 @@ def build(args):
 
     model = DETRVAE(
         backbones,
+        transformer,
+        encoder,
+        state_dim=state_dim,
+        num_queries=args.num_queries,
+        camera_names=args.camera_names,
+        vq=args.vq,
+        vq_class=args.vq_class,
+        vq_dim=args.vq_dim,
+        action_dim=args.action_dim,
+    )
+
+    n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("number of parameters: %.2fM" % (n_parameters/1e6,))
+
+    return model
+
+# ACT_PC算法实现
+def build_PC(args):
+    # NOTE realman 的 state_dim = 16， aloha 的等于14
+    state_dim = 16 # TODO hardcode
+
+    # From state
+    # backbone = None # from state for now, no need for conv nets
+    # From image
+
+    #print args
+    print('======================')
+    print(args)
+    backbones = []
+    for _ in args.camera_names:
+        backbone = build_backbone(args)
+        backbones.append(backbone)
+
+    # 新增：构建点云编码器
+    if args.point_cloud:
+        # print("build point_cloud encoder")
+        pointcloud_encoder = build_pointcloud_encoder(args)
+    else:
+        pointcloud_encoder = None
+
+    transformer = build_transformer_PC(args)
+
+    if args.no_encoder:
+        encoder = None
+    else:
+        # encoder = build_transformer_PC(args)
+        encoder = build_encoder(args)
+
+    model = DETRVAE_PC(
+        backbones,
+        pointcloud_encoder,
         transformer,
         encoder,
         state_dim=state_dim,

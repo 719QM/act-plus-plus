@@ -18,7 +18,7 @@ from constants import PUPPET_GRIPPER_JOINT_OPEN
 from utils import load_data # data functions
 from utils import sample_box_pose, sample_insertion_pose, sample_box_pose_RM # robot functions
 from utils import compute_dict_mean, set_seed, detach_dict, calibrate_linear_vel, postprocess_base_action # helper functions
-from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy
+from policy import ACTPolicy, CNNMLPPolicy, DiffusionPolicy, ACT_PC_Policy # policy classes
 from visualize_episodes import save_videos
 
 from detr.models.latent_model import Latent_Model_Transformer
@@ -78,13 +78,14 @@ def main(args):
     isrmrealrobot = task_name[:7] == 'rmreal_'
     # 如果任务的前四个字符是sim_，is_sim=1
     is_sim = task_name[:4] == 'sim_'
+    is_pc = task_name[:3] =='pc_'
     # print the task name and config
     print('task_name: ', task_name)
     # 如果是模拟任务，从constants导入SIM_TASK_CONFIGS
     if is_sim or task_name == 'all':
         from constants import SIM_TASK_CONFIGS
         task_config = SIM_TASK_CONFIGS[task_name]
-    elif isrmrealrobot:
+    elif isrmrealrobot or is_pc:
         from constants import REALMAN_TASK_CONFIGS
         task_config = REALMAN_TASK_CONFIGS[task_name]
     else:
@@ -103,7 +104,7 @@ def main(args):
     # fixed parameters
     # 定义模型的架构和超参数，包括学习率、网络结构、层数等
     # NOTE realman state_dim = 16(7+1+7+1); aloha state_dim = 14(6+1+6+1),action_dim为什么是16??好像是因为还有俩base的数据
-    if isrmrealrobot:
+    if isrmrealrobot or is_pc:
         state_dim = 16
         action_dim = 18
     else:
@@ -151,6 +152,31 @@ def main(args):
     elif policy_class == 'CNNMLP':
         policy_config = {'lr': args['lr'], 'lr_backbone': lr_backbone, 'backbone': backbone, 'num_queries': 1,
                          'camera_names': camera_names,}
+    elif policy_class == 'ACT_PC':
+        # 编码层
+        enc_layers = 4
+        # 解码层
+        dec_layers = 7
+        # 头数
+        nheads = 8
+        policy_config = {'lr': args['lr'],
+                         'num_queries': args['chunk_size'],
+                         'kl_weight': args['kl_weight'],
+                         'hidden_dim': args['hidden_dim'],
+                         'dim_feedforward': args['dim_feedforward'],
+                         'lr_backbone': lr_backbone,
+                         'backbone': backbone,
+                         'enc_layers': enc_layers,
+                         'dec_layers': dec_layers,
+                         'nheads': nheads,
+                         'camera_names': camera_names,
+                         'vq': args['use_vq'],
+                         'vq_class': args['vq_class'],
+                         'vq_dim': args['vq_dim'],
+                         'action_dim': action_dim,
+                         'no_encoder': args['no_encoder'],
+
+                         }
     else:
         raise NotImplementedError
 
@@ -183,6 +209,7 @@ def main(args):
         'rm_real_robot': isrmrealrobot,
         'load_pretrain': args['load_pretrain'],
         'actuator_config': actuator_config,
+        'point_cloud': args['point_cloud'],
     }
     if not os.path.isdir(ckpt_dir):
         os.makedirs(ckpt_dir)
@@ -238,6 +265,8 @@ def make_policy(policy_class, policy_config):
         policy = CNNMLPPolicy(policy_config)
     elif policy_class == 'Diffusion':
         policy = DiffusionPolicy(policy_config)
+    elif policy_class == 'ACT_PC':
+        policy = ACT_PC_Policy(policy_config)
     else:
         raise NotImplementedError
     return policy
@@ -249,6 +278,8 @@ def make_optimizer(policy_class, policy):
     elif policy_class == 'CNNMLP':
         optimizer = policy.configure_optimizers()
     elif policy_class == 'Diffusion':
+        optimizer = policy.configure_optimizers()
+    elif policy_class == 'ACT_PC':
         optimizer = policy.configure_optimizers()
     else:
         raise NotImplementedError
@@ -513,6 +544,7 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
                     all_actions = raw_action.unsqueeze(0)
                     # if use_actuator_net:
                     #     collect_base_action(all_actions, norm_episode_all_base_actions)
+
                 else:
                     raise NotImplementedError
                 # print('query policy: ', time.time() - time3)
@@ -625,12 +657,22 @@ def eval_bc(config, ckpt_name, save_episode=True, num_rollouts=50):
 
 def forward_pass(data, policy):
     # 前向传播生成模型的输出
-    image_data, qpos_data, action_data, is_pad = data
+    # NOTE 添加点云信息 image_data, qpos_data, action_data, _, is_pad = data
+    image_data, qpos_data, action_data, _, _, is_pad = data
     # 将张量数据从CPU内存移动到GPU内存
     image_data, qpos_data, action_data, is_pad = image_data.cuda(), qpos_data.cuda(), action_data.cuda(), is_pad.cuda()
     # print(action_data.shape)
     return policy(qpos_data, image_data, action_data, is_pad) # TODO remove None
 
+def forward_pass_PC(data, policy):
+    # 前向传播生成模型的输出
+    image_data, qpos_data, action_data, pointcloud_data, objectpose_data, is_pad = data
+    # print(pointcloud_data)
+    # 将张量数据从CPU内存移动到GPU内存
+    image_data, qpos_data, action_data, pointcloud_data, objectpose_data, is_pad = (
+        image_data.cuda(), qpos_data.cuda(), action_data.cuda(), pointcloud_data.cuda(), objectpose_data.cuda(), is_pad.cuda())
+    # print(action_data.shape)
+    return policy(qpos_data, image_data, action_data, pointcloud_data, objectpose_data, is_pad)  # TODO remove None
 
 def train_bc(train_dataloader, val_dataloader, config):
     # 该函数用于训练行为克隆模型BC
@@ -645,6 +687,8 @@ def train_bc(train_dataloader, val_dataloader, config):
     eval_every = config['eval_every']
     validate_every = config['validate_every']
     save_every = config['save_every']
+    # 点云
+    point_cloud = config['point_cloud']
 
     set_seed(seed)
 
@@ -674,7 +718,10 @@ def train_bc(train_dataloader, val_dataloader, config):
                 policy.eval()
                 validation_dicts = []
                 for batch_idx, data in enumerate(val_dataloader):
-                    forward_dict = forward_pass(data, policy)
+                    if point_cloud:
+                        forward_dict = forward_pass_PC(data, policy)
+                    else:
+                        forward_dict = forward_pass(data, policy)
                     validation_dicts.append(forward_dict)
                     if batch_idx > 50:
                         break
@@ -709,7 +756,11 @@ def train_bc(train_dataloader, val_dataloader, config):
         policy.train()
         optimizer.zero_grad()
         data = next(train_dataloader)
-        forward_dict = forward_pass(data, policy)
+        if point_cloud:
+            # 前向传播
+            forward_dict = forward_pass_PC(data, policy)
+        else:
+            forward_dict = forward_pass(data, policy)
         # backward
         loss = forward_dict['loss']
         loss.backward()
@@ -773,6 +824,11 @@ if __name__ == '__main__':
     parser.add_argument('--vq_class', action='store', type=int, help='vq_class')
     parser.add_argument('--vq_dim', action='store', type=int, help='vq_dim')
     parser.add_argument('--no_encoder', action='store_true')
+
+    # 增加判断是否需要点云的arg
+    parser.add_argument('--point_cloud', action='store_true', default=False, help='whether to use point cloud')
+    parser.add_argument('--use_pc_color', action='store_true', default=False, help='whether to use point cloud color')
+    parser.add_argument('--pointcloud_dim', action='store', type=int)
 
     
     main(vars(parser.parse_args()))

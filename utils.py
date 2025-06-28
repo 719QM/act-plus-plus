@@ -52,6 +52,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
         episode_id, start_ts = self._locate_transition(index)
         dataset_path = self.dataset_path_list[episode_id]
+        ispointcloud_data = False
+        isobjectpose_data = False
         try:
             # print(dataset_path)
             with h5py.File(dataset_path, 'r') as root:
@@ -96,6 +98,30 @@ class EpisodicDataset(torch.utils.data.Dataset):
                 else:
                     action = action[max(0, start_ts - 1):] # hack, to make timesteps more aligned
                     action_len = episode_len - max(0, start_ts - 1) # hack, to make timesteps more aligned
+
+                if '/observations/point_cloud' in root:
+
+                    # print("存在点云数据")
+                    # 读取点云数据（shape 应该为 N x 3）
+                    ispointcloud_data = True
+                    pointcloud_xyz = root['/observations/point_cloud/xyz'][:, :, start_ts]  # (3, 1024)
+                    pointcloud_rgb = root['/observations/point_cloud/rgb'][:, :, start_ts]  # (3, 1024)
+
+                    pointcloud_xyz = np.transpose(pointcloud_xyz, (1, 0))  # (1024, 3)
+                    pointcloud_rgb = np.transpose(pointcloud_rgb, (1, 0)).astype(np.float32) / 255.0  # (1024, 3)，归一化
+
+                    pointcloud = np.concatenate([pointcloud_xyz, pointcloud_rgb], axis=-1).astype(np.float32)  # (1024, 6)
+
+                if '/observations/object_pose' in root:
+                    isobjectpose_data = True
+                    R_mat = root['/observations/object_pose/R'][start_ts]  # (9,)
+                    T_vec = root['/observations/object_pose/T'][start_ts]  # (3,)
+                    object_pose = np.concatenate([R_mat, T_vec])  # (12,)
+                    object_pose = np.repeat(object_pose[None, :], self.chunk_size, axis=0)  # (chunk_size, 12)
+                    object_pose_data = torch.from_numpy(object_pose).float()
+                else:
+                    object_pose_data = torch.zeros((self.chunk_size, 12), dtype=torch.float32)
+
             # self.is_sim = is_sim
             padded_action = np.zeros((self.max_episode_len, original_action_shape[1]), dtype=np.float32)
             padded_action[:action_len] = action
@@ -116,6 +142,17 @@ class EpisodicDataset(torch.utils.data.Dataset):
             qpos_data = torch.from_numpy(qpos).float()
             action_data = torch.from_numpy(padded_action).float()
             is_pad = torch.from_numpy(is_pad).bool()
+            if ispointcloud_data:
+                pointcloud_data = torch.from_numpy(pointcloud).float()
+                # print("存在点云数据")
+            else:
+                pointcloud_data = torch.zeros((self.chunk_size, 1024, 6), dtype=torch.float32)  # (T, 1024, 6)
+
+            if isobjectpose_data:
+                object_pose_data = torch.from_numpy(object_pose).float()
+                # print("存在物体位姿数据")
+            else:
+                object_pose_data = torch.zeros((self.chunk_size, 12), dtype=torch.float32)  # (T, 12) for R and T
 
             # channel last
             image_data = torch.einsum('k h w c -> k c h w', image_data)
@@ -153,7 +190,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
             quit()
         # print(f"action date shape: {action_data.shape}")
         # print(image_data.dtype, qpos_data.dtype, action_data.dtype, is_pad.dtype)
-        return image_data, qpos_data, action_data, is_pad
+        return image_data, qpos_data, action_data, pointcloud_data, object_pose_data, is_pad
 
 
 def get_norm_stats(dataset_path_list):
